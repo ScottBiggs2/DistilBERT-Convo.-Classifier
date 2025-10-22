@@ -1,0 +1,55 @@
+# Loss weighting configuration for intent classification
+# Higher weights = higher penalty for that mistake type
+
+# Categories that contain NSFW/sensitive content - critical to identify correctly
+high_risk_categories:
+  - "relationships_and_personal_reflection"
+  - "games_and_role_play" 
+  - "creative_ideation"
+
+# Low-risk categories where we serve ads safely
+low_risk_categories:
+  - "greetings_and_chitchat"
+  - "how_to_advice"  
+  - "specific_info"
+  - "academic_help"
+  - "computer_programming"
+
+# Weight multipliers for different mistake types
+penalty_weights:
+  # CRITICAL: High-risk content classified as low-risk (NSFW gets ads)
+  high_risk_to_low_risk: 10.0
+  
+  # HIGH: High-risk content misclassified as anything else
+  high_risk_to_other: 5.0
+  
+  # MEDIUM: Safe content classified as high-risk (false positive)
+  low_risk_to_high_risk: 2.0
+  
+  # LOW: Confusion between safe categories
+  low_risk_to_low_risk: 0.5
+  
+  # DEFAULT: Standard penalty for other mistakes
+  default: 1.0
+
+# Model training settings
+training:
+  model_name: "distilbert-base-uncased"
+  max_length: 512
+  batch_size: 16
+  learning_rate: 2e-5
+  num_epochs: 3
+  use_weighted_loss: true
+  
+# Business rules for validation
+validation:
+  # Maximum acceptable error rate for high-risk content (as percentage)
+  max_high_risk_error_rate: 2.0
+  
+  # Minimum recall required for high-risk categories
+  min_high_risk_recall: 0.95
+  
+  # Categories where precision is most important
+  precision_critical:
+    - "relationships_and_personal_reflection"
+    - "games_and_role_play"

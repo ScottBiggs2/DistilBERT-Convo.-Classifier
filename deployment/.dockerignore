@@ -1,0 +1,69 @@
+# Exclude files that shouldn't be in the Docker image
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# Python cache and environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+.env
+*.env
+
+# IDE and editor files  
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# Documentation and development files
+README.md
+*.md
+docs/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Experimental and temporary files
+experiments/
+temp/
+tmp/
+*.tmp
+
+# Build artifacts (except our needed models)
+build/
+dist/
+*.egg-info/
+
+# Docker files (don't copy into container)
+deployment/Dockerfile
+deployment/docker-compose.yml
+deployment/.dockerignore
+
+# Large datasets (we only need the model)
+data/
+!models/onnx-intent-classifier/
+
+# Training artifacts we don't need in production
+models/distilbert-intent-classifier/
+models/checkpoint-*/
+
+# Logs
+*.log
+logs/
