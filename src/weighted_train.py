@@ -21,6 +21,8 @@ from transformers import (
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Import our weighted loss implementation
 from weighted_loss import LossWeightConfig, WeightedLossTrainer, create_weighted_trainer
@@ -124,6 +126,71 @@ def load_data(file_path: str) -> Tuple[List[str], List[str]]:
     logger.info(f"Loaded {len(conversations)} conversations with {len(set(labels))} unique labels")
     return conversations, labels
 
+def plot_confusion_matrix(y_true, y_pred, labels, title="Confusion Matrix", figsize=(12, 10)):
+    """
+    Plot confusion matrix with proper formatting for intent classification
+    
+    Args:
+        y_true: True labels
+        y_pred: Predicted labels  
+        labels: List of label names
+        title: Plot title
+        figsize: Figure size tuple
+    """
+    # Create confusion matrix
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    
+    # Create DataFrame for better visualization
+    cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+    
+    # Create the plot
+    plt.figure(figsize=figsize)
+    
+    # Use a heatmap with annotations
+    sns.heatmap(cm_df, 
+                annot=True, 
+                fmt='d', 
+                cmap='Blues',
+                square=True,
+                linewidths=0.5,
+                cbar_kws={'shrink': 0.8})
+    
+    plt.title(f'{title}\nTest Set Performance', fontsize=14, pad=20)
+    plt.xlabel('Predicted Label', fontsize=12)
+    plt.ylabel('True Label', fontsize=12)
+    
+    # Rotate labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    # Show the plot
+    plt.show()
+    
+    # Print some key statistics
+    print(f"\nConfusion Matrix Statistics:")
+    print(f"Total predictions: {cm.sum()}")
+    print(f"Correct predictions: {np.trace(cm)}")
+    print(f"Overall accuracy: {np.trace(cm)/cm.sum():.4f}")
+    
+    # Identify most confused pairs
+    print(f"\nMost Common Misclassifications:")
+    cm_no_diag = cm.copy()
+    np.fill_diagonal(cm_no_diag, 0)  # Remove diagonal (correct predictions)
+    
+    # Find top 5 confusion pairs
+    max_indices = np.unravel_index(np.argsort(cm_no_diag.ravel())[-5:], cm_no_diag.shape)
+    
+    for i in range(4, -1, -1):  # Reverse to show highest first
+        true_idx, pred_idx = max_indices[0][i], max_indices[1][i]
+        count = cm_no_diag[true_idx, pred_idx]
+        if count > 0:
+            true_label = labels[true_idx][:20] + "..." if len(labels[true_idx]) > 20 else labels[true_idx]
+            pred_label = labels[pred_idx][:20] + "..." if len(labels[pred_idx]) > 20 else labels[pred_idx]
+            print(f"  {count:2d}x: '{true_label}' → '{pred_label}'")
+
 def compute_metrics(eval_pred):
     """Compute metrics for evaluation"""
     predictions, labels = eval_pred
@@ -139,7 +206,7 @@ def compute_metrics(eval_pred):
         'f1_weighted': f1_weighted
     }
 
-def train_model(config: ModelConfig, data_path: str):
+def train_model(config: ModelConfig, data_path: str, show_confusion_matrix: bool = False):
     """Main training function"""
     logger.info("Starting training pipeline...")
     logger.info(f"Weighted loss: {'ENABLED' if config.use_weighted_loss else 'DISABLED'}")
@@ -315,6 +382,17 @@ def train_model(config: ModelConfig, data_path: str):
         # Use labels parameter to handle missing classes in small datasets
         print(classification_report(true_labels, pred_labels, labels=INTENT_LABELS, target_names=INTENT_LABELS, zero_division=0))
         
+        # Plot confusion matrix if requested
+        if show_confusion_matrix:
+            logger.info("Generating confusion matrix visualization...")
+            plot_confusion_matrix(
+                true_labels, 
+                pred_labels, 
+                INTENT_LABELS,
+                title="Intent Classification Confusion Matrix" + 
+                      (" (Weighted Loss)" if config.use_weighted_loss else " (Standard Loss)")
+            )
+        
         # Save evaluation results
         results_path = os.path.join(config.output_dir, "evaluation_results.json")
         with open(results_path, 'w') as f:
@@ -351,6 +429,7 @@ def main():
     parser.add_argument("--max-length", type=int, default=512, help="Max sequence length")
     parser.add_argument("--skip-eval", action="store_true", help="Skip evaluation for faster training")
     parser.add_argument("--no-weighted-loss", action="store_true", help="Disable weighted loss (use standard cross-entropy)")
+    parser.add_argument("--show-confusion-matrix", action="store_true", help="Display confusion matrix plot (useful for Jupyter notebooks)")
     
     args = parser.parse_args()
     
@@ -366,7 +445,7 @@ def main():
     )
     
     # Train model
-    trainer, results = train_model(config, args.data_path)
+    trainer, results = train_model(config, args.data_path, args.show_confusion_matrix)
     
     print(f"\nTraining completed successfully!")
     print(f"Model saved to: {config.output_dir}")

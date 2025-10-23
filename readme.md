@@ -1,4 +1,4 @@
-*** NOT CURRENT TREE ***
+***Slighlty behind current tree ***
 topic-classifier/
 ├─ data/
 │ ├─ records.json # raw JSON files [DONE]
@@ -91,13 +91,14 @@ python src/label_and_audit.py
 
 # Training, Saving, and Evaluating Model:
 
+Equal weights across all classes:
 ```bash
 python src/train.py --batch-size 8 --epochs 1 --data-path ./data/gpt4o_labelled.json --output-dir ./models/distilbert-intent-classifier
 ```
 
 Or transitional error weighted training:
 ```bash
-python src/weighted_train.py --batch-size 8 --epochs 1 --data-path ./data/gpt4o_labelled.json --output-dir ./models/distilbert-intent-classifier
+python src/weighted_train.py --batch-size 8 --epochs 1 --data-path ./data/gpt4o_labelled.json --output-dir ./models/distilbert-intent-classifier --show-confusion-matrix
 ```
 
 ## Baby Example

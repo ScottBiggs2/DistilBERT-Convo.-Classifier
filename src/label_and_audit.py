@@ -27,7 +27,7 @@ LABELED_OUTPUT = "data/gpt4o_labelled.json"
 FINAL_OUTPUT = "data/verified_gpt5.json"
 
 BATCH_SIZE = int(os.getenv("LABEL_BATCH_SIZE", 8))
-VERIFY_FRACTION = 0.1
+VERIFY_FRACTION = 0.025
 RANDOM_SEED = 42
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -135,7 +135,6 @@ async def verify_one_gpt5(msg):
                 {"role": "system", "content": VERIFY_PROMPT},
                 {"role": "user", "content": json.dumps({"content": text, "intent": msg["intent"]})}
             ],
-            temperature=0
         )
         verification = json.loads(response.choices[0].message.content)
         msg["verified"] = verification.get("verified", False)

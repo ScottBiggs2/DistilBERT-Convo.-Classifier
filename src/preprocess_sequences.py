@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Preprocess conversation sequences:
-- Load raw_sequences.json (one record per chat)
-- Clean text (remove control chars, URLs)
-- Batch tokenize and truncate at token-level using a front+back strategy
+Preprocess conversation sequences with adaptive chunk selection:
+- Clean text
+- Split into chunks (~128 tokens)
+- Rank chunks by TF-IDF informativeness
+- Keep head, tail, and top-scoring middle chunks until max token budget
 - Save cleaned/truncated sequences to data/cleaned_sequences.json
-
-Outputs records:
-{ "chat_id": "...", "sequence": "...", "sequence_truncated": "...", "num_turns": N }
 """
 
 import os
 import json
 import re
+import numpy as np
 from tqdm import tqdm
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 load_dotenv()
 
@@ -24,57 +24,68 @@ CLEANED_OUTPUT_PATH = os.getenv("CLEANED_SEQUENCES_PATH", "data/cleaned_sequence
 
 TOKENIZER_MODEL = os.getenv("TOKENIZER_MODEL", "distilbert-base-uncased")
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 512))
-FRONT_RATIO = float(os.getenv("FRONT_TOKEN_RATIO", 0.75))  # proportion of tokens kept at front
 BATCH_SIZE = int(os.getenv("PREPROCESS_BATCH_SIZE", 64))
-USE_FAST_TOKENIZER = True  # use HuggingFace fast tokenizer
+USE_FAST_TOKENIZER = True
 
-# load tokenizer (no model)
 tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_MODEL, use_fast=USE_FAST_TOKENIZER)
 
+# ---------------- Cleaning -----------------
 def clean_text(text: str) -> str:
     if not isinstance(text, str):
         return ""
-    text = re.sub(r"http\S+", "", text)  # remove URLs
-    text = re.sub(r"\s+", " ", text)  # collapse whitespace
-    text = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", text)  # control chars
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", text)
     return text.strip()
 
-def truncate_tokens_front_back(token_ids, max_tokens=MAX_TOKENS, front_ratio=FRONT_RATIO):
-    """
-    Keep first floor(max_tokens*front_ratio) tokens and last (max_tokens - front) tokens.
-    token_ids: list[int]
-    """
-    if len(token_ids) <= max_tokens:
-        return token_ids
-    front_len = int(max_tokens * front_ratio)
-    back_len = max_tokens - front_len
-    if front_len <= 0:
-        front_len = max_tokens // 2
-        back_len = max_tokens - front_len
-    return token_ids[:front_len] + token_ids[-back_len:]
+# ---------------- Chunking -----------------
+def split_into_chunks(text, chunk_size_tokens=128):
+    tokens = tokenizer.encode(text, add_special_tokens=False)
+    chunks = []
+    for i in range(0, len(tokens), chunk_size_tokens):
+        sub = tokens[i:i + chunk_size_tokens]
+        chunks.append(tokenizer.decode(sub))
+    return chunks
 
-def batch_truncate_sequences(sequences):
-    """
-    sequences: list of raw sequence strings
-    returns list of truncated strings
-    """
-    # tokenizer.batch_encode_plus returns dict with input_ids list
-    enc = tokenizer.batch_encode_plus(
-        sequences,
-        add_special_tokens=True,
-        truncation=False,  # we will truncate manually for head+tail behavior
-        padding=False,
-        return_attention_mask=False,
-        return_token_type_ids=False
+# ---------------- Scoring ------------------
+def select_informative_chunks(text, max_tokens=MAX_TOKENS):
+    chunks = split_into_chunks(text, chunk_size_tokens=max_tokens // 4)
+    if len(chunks) <= 2:
+        return text  # small text, no truncation
+
+    # compute TF-IDF scores per chunk
+    vectorizer = TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_features=5000,
+        stop_words="english"
     )
+    tfidf = vectorizer.fit_transform(chunks)
+    scores = np.asarray(tfidf.sum(axis=1)).ravel()
 
+    # always keep head and tail
+    head, tail = 0, len(chunks) - 1
+    remaining = list(range(1, tail))
+    # rank middle chunks by score
+    ranked = sorted(remaining, key=lambda i: scores[i], reverse=True)
+
+    # build combined text under token budget
+    selected = [head] + ranked + [tail]
+    combined_tokens = []
+    for idx in selected:
+        chunk_toks = tokenizer.encode(chunks[idx], add_special_tokens=False)
+        if len(combined_tokens) + len(chunk_toks) > max_tokens:
+            break
+        combined_tokens.extend(chunk_toks)
+    return tokenizer.decode(combined_tokens, skip_special_tokens=True)
+
+# ---------------- Batch wrapper ------------
+def batch_truncate_sequences(sequences):
     truncated_texts = []
-    for ids in enc["input_ids"]:
-        t_ids = truncate_tokens_front_back(ids, MAX_TOKENS, FRONT_RATIO)
-        text = tokenizer.decode(t_ids, skip_special_tokens=True)
-        truncated_texts.append(text)
+    for text in tqdm(sequences, desc="Adaptive truncation"):
+        truncated_texts.append(select_informative_chunks(text, MAX_TOKENS))
     return truncated_texts
 
+# ---------------- Main ---------------------
 def preprocess(input_path=RAW_SEQUENCES_PATH, output_path=CLEANED_OUTPUT_PATH):
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input not found: {input_path}")
@@ -98,14 +109,9 @@ def preprocess(input_path=RAW_SEQUENCES_PATH, output_path=CLEANED_OUTPUT_PATH):
         metas.append({
             "chat_id": it.get("chat_id"),
             "num_turns": it.get("num_turns", None),
-            # keep any other metadata you want (but not "context"/"query")
         })
 
-    truncated_results = []
-    for i in tqdm(range(0, len(raw_sequences), BATCH_SIZE), desc="Truncate batches"):
-        batch = raw_sequences[i:i+BATCH_SIZE]
-        truncated = batch_truncate_sequences(batch)
-        truncated_results.extend(truncated)
+    truncated_results = batch_truncate_sequences(raw_sequences)
 
     processed = []
     for meta, orig, trunc in zip(metas, raw_sequences, truncated_results):
