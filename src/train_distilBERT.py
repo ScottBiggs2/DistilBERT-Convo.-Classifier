@@ -50,22 +50,22 @@ class DistillationConfig:
     
     # Model configuration
     model_name: str = "distilbert-base-uncased"
-    max_length: int = 256
-    num_labels: int = 9
+    max_length: int = 512
+    num_labels: int = 13
     
     # Training configuration
     batch_size: int = 16
     learning_rate: float = 2e-5
     num_epochs: int = 5
     warmup_steps: int = 100
-    weight_decay: float = 0.01
+    weight_decay: float = 1e-3
     
     # Distillation configuration
     temperature: float = 4.0          # Temperature for soft targets
     alpha: float = 0.7               # Weight for soft loss (1-alpha for hard loss)
     
     # Loss weighting configuration
-    nsfw_sfw_penalty: float = 10.0   # Heavy penalty for NSFW/SFW confusion
+    banned_unbanned_penalty: float = 5.0  # Heavy penalty for banned/unbanned content confusion
     within_category_penalty: float = 1.0  # Normal penalty within SFW or NSFW
     
     # Evaluation configuration
@@ -168,12 +168,15 @@ class WeightedDistillationLoss:
         self.class_to_idx = {cls: idx for idx, cls in enumerate(class_order)}
         
         # Define NSFW and SFW classes
-        self.nsfw_classes = {'X', 'Y', 'Z'}
-        self.sfw_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
+        # self.nsfw_classes = {'X', 'Y', 'Z'}
+        self.banned_classes = {'D', 'J', 'M'}
+        # self.sfw_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
+        self.ok_classes = {'A', 'B', 'C' , 'E', 'F', 'G', 'H', 'I', 'K', 'L'}
+
         
         # Create confusion penalty matrix
         self.penalty_matrix = self._create_penalty_matrix()
-        logger.info(f"💥 Penalty matrix created with NSFW/SFW penalty: {config.nsfw_sfw_penalty}x")
+        logger.info(f"💥 Penalty matrix created with NSFW/SFW penalty: {config.banned_unbanned_penalty}x")
         
     def _create_penalty_matrix(self) -> torch.Tensor:
         """Create penalty matrix for different types of misclassifications"""
@@ -187,7 +190,7 @@ class WeightedDistillationLoss:
                     penalty_matrix[i, j] = 0.0
                 elif self._is_cross_category_error(true_class, pred_class):
                     # Heavy penalty for NSFW/SFW confusion
-                    penalty_matrix[i, j] = self.config.nsfw_sfw_penalty
+                    penalty_matrix[i, j] = self.config.banned_unbanned_penalty
                 else:
                     # Normal penalty for within-category confusion
                     penalty_matrix[i, j] = self.config.within_category_penalty
@@ -201,8 +204,8 @@ class WeightedDistillationLoss:
     
     def _is_cross_category_error(self, true_class: str, pred_class: str) -> bool:
         """Check if this is a cross-category (NSFW/SFW) error"""
-        true_is_nsfw = true_class in self.nsfw_classes
-        pred_is_nsfw = pred_class in self.nsfw_classes
+        true_is_nsfw = true_class in self.banned_classes
+        pred_is_nsfw = pred_class in self.banned_classes
         return true_is_nsfw != pred_is_nsfw
     
     def compute_loss(self, student_logits: torch.Tensor, hard_labels: torch.Tensor, 
@@ -474,7 +477,7 @@ class DistilBERTDistillation:
             'training_config': {
                 'temperature': self.config.temperature,
                 'alpha': self.config.alpha,
-                'nsfw_sfw_penalty': self.config.nsfw_sfw_penalty,
+                'banned_unbanned_penalty': self.config.banned_unbanned_penalty,
                 'within_category_penalty': self.config.within_category_penalty,
                 'batch_size': self.config.batch_size,
                 'learning_rate': self.config.learning_rate,
@@ -529,8 +532,8 @@ class DistilBERTDistillation:
         plt.close()  # Close to prevent display during training
         
         # Calculate business-critical metrics
-        nsfw_classes = {'X', 'Y', 'Z'}
-        sfw_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
+        banned_classes = {'X', 'Y', 'Z'}
+        ok_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
         
         # Cross-category errors (most expensive)
         cross_category_errors = 0
@@ -542,8 +545,8 @@ class DistilBERTDistillation:
             true_class = class_names[true_idx]
             pred_class = class_names[pred_idx]
             
-            true_is_nsfw = true_class in nsfw_classes
-            pred_is_nsfw = pred_class in nsfw_classes
+            true_is_nsfw = true_class in banned_classes
+            pred_is_nsfw = pred_class in banned_classes
             
             if true_is_nsfw != pred_is_nsfw:
                 cross_category_errors += 1
@@ -640,13 +643,13 @@ async def main():
         num_epochs=int(os.getenv("NUM_EPOCHS", "5")),
         temperature=float(os.getenv("TEMPERATURE", "4.0")),
         alpha=float(os.getenv("ALPHA", "0.7")),
-        nsfw_sfw_penalty=float(os.getenv("NSFW_SFW_PENALTY", "10.0")),
+        banned_unbanned_penalty=float(os.getenv("NSFW_SFW_PENALTY", "5.0")),
     )
     
     logger.info("🎓 DistilBERT Knowledge Distillation Training")
     logger.info(f"📊 Temperature: {config.temperature}")
     logger.info(f"⚖️  Alpha (soft/hard loss balance): {config.alpha}")
-    logger.info(f"💥 NSFW/SFW penalty: {config.nsfw_sfw_penalty}x")
+    logger.info(f"💥 NSFW/SFW penalty: {config.banned_unbanned_penalty}x")
     logger.info(f"📂 Data: {DATA_PATH}")
     logger.info(f"📁 Output: {OUTPUT_DIR}")
     
@@ -711,7 +714,7 @@ async def main():
         'training_config': {
             'temperature': config.temperature,
             'alpha': config.alpha,
-            'nsfw_sfw_penalty': config.nsfw_sfw_penalty,
+            'banned_unbanned_penalty': config.banned_unbanned_penalty,
             'num_epochs': config.num_epochs,
             'learning_rate': config.learning_rate,
             'batch_size': config.batch_size

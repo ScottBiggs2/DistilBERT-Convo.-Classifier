@@ -50,12 +50,12 @@ class ConversationData:
 class BatchOpenAILogitsExtractor:
     """Efficient batch processing for OpenAI logits extraction"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4o", use_batch_api: bool = True):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", use_batch_api: bool = True):
         self.client = openai.AsyncOpenAI(api_key=api_key)
         self.sync_client = openai.OpenAI(api_key=api_key)
         self.model = model
         self.use_batch_api = use_batch_api
-        self.valid_class_tokens = {'A', 'B', 'C', 'D', 'E', 'F', 'X', 'Y', 'Z'}
+        self.valid_class_tokens = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'}
         
         logger.info(f"✅ Batch OpenAI client initialized")
         logger.info(f"🤖 Model: {model}")
@@ -65,45 +65,133 @@ class BatchOpenAILogitsExtractor:
     def create_classification_prompt(self, conversation_text: str) -> str:
         """Create classification prompt for OpenAI"""
         INTENT_CATEGORIES_LIST = """
-        A → academic_help – Homework, structured studying, academic problem solving, exam-style questions, translation, academic tutoring, and suspected academic writing work.
-        B → writing_and_editing – Editing or generating non-fiction text such as essays, summaries, workplace communications (email, slack, etc), translations.
-        C → creative_content – Fiction, poetry, story creation, creative brainstorming WITHOUT sexual, violent, or other NSFW content.
-        D → practical_advice – Everyday how-to guidance, general curiosity questions, product recommendations, cooking/baking/gardening, exercise, and other lifestyle info (non-medical).
-        E → technical_coding – Software development, debugging, coding guidance, ML/AI engineering help, coding completions, and other IT services/questions.
-        F → personal_support – Emotional expression, relationship concerns, and mental health support. This also includes motivational and self-improvement support. 
+        A - academic_help – Students getting help with homework, assignments, tests, or studying. Key indicators: multiple problems/questions in a row, test/quiz format (multiple choice, true/false, select correct answer), textbook-style questions, requests for step-by-step solutions or translations, academic subject matter (math, science, world languages, history, etc.) in a learning context, asking for explanations of academic concepts. Use this even if not explicitly stated as homework
+        B - personal_writing_or_communication – Draft, edit, or improve personal/professional emails, messages, social media posts, letters, or workplace communications. The focus is on REAL correspondence to actual people (boss, colleague, client, friend)
+        C - writing_and_editing – Create, edit, or improve nonfiction or instructional writing: essays, reports, arguments, articles, blog posts, or educational materials (lesson plans, assignments, summaries). If the focus is logic, structure, or conveying factual information, consider using this category.
+        D - creative_writing_and_role_play – Create poems, stories, fictional narratives, scripts, dialogues, or character-based roleplays. Look for tone, emotion, or imaginative context.If the writing involves characters, world-building, roleplay, sci-fi or fantasy, or other storytelling, consider using this category.
+        E - general_guidance_and_info – Provide step-by-step guidance, practical advice, or factual information about how or why something works. Combines procedural “how-to” help with general knowledge or curiosity.
+        F - programming_and_data_analysis – Write or debug code or work with data/programming tools. Covers technical problem solving in computing, IT, or analytics contexts.
+        G - creative_ideation – Generate new ideas, brainstorm concepts, discover new topics or related resources, or create names/slogans. 
+        H - purchasable_products – Ask about products, services, or prices. 
+        I - greetings_and_chitchat – Small talk or casual chat, asking about the assistant's day, 
+        J - relationships_and_personal_reflection – Discuss emotions, relationships, or introspection. Typically but not strictly non-sexual content. 
+        K - media_generation_or_analysis – Create, edit, analyze, or retrieve visual/audio/media content (images, photos, videos). 
+        L - other – if there is no indication of what the user wants or if there is an intent that is not listed above; should be rare. e.g. suspicious requests, attempts to extract sensitive information.
+        M - other_obscene_or_illegal - if the user is making obscene or illegal requests (including violence, drugs, bigotry, hate speech, etc); should be rare.
         """
 
-        NSFW_CATEGORIES = """
-        X → nsfw_personal – Real-person sexual requests, sexting, explicit intimacy involving real individuals (INCLUDING the assistant).
-        Y → nsfw_fantasy – Fictional erotic scenarios, roleplay (INCLUDING with the assistant), sexual imagination, fetish elements.
-        Z → nsfw_other – Pornography media requests, sexual product questions, unclear sexual intent, and other unclear but distinct NSFW content (eg, violence, crime, drug use, etc).
+        EXAMPLES_LIST = f"""
+        A - academic_help:
+        - "Solve for x: 2x + 3 = 7"
+        - "How do you calculate the area of a circle?"
+        - "Explain photosynthesis in simple terms."
+        - "What is the boiling point of water at sea level?"
+        - "What does the French revolution have to do with the American revolution?"
+
+        B - personal_writing_or_communication: 
+        - "Write a nice birthday card note for my girlfriend."
+        - "What should my speech say to Karl at his retirement party?"
+        - "Help me write a cover letter for a job application."
+        - "Compose an apology email to my boss."
+        - "Aide moi `a ´ecrire une lettre `a mon p`ere."
+
+        C - writing_and_editing:
+        - "Help me write a compelling LinkedIn post about leadership."
+        - "Edit this essay for clarity and grammar."
+        - "Is my tone in this email too formal?"
+        - "Summarize the main points of this article."
+        - "Create an outline for a report on climate change."
+
+        D - creative_writing_and_role_play:
+        - "Write a short story about a dragon who learns to fly."
+        - "Create a dialogue between a detective and a suspect."
+        - "Pretend to be a medieval knight on a quest to rescue a princess."
+        - "Act like Pricess Leia from Star Wars."
+
+        E - general_guidance_and_info:
+        - "How do I turn off my screensaver?"
+        - "My car won’t start; what should I try?"
+        - "Comment faire pour me connecter `a mon wifi?"
+        - "What’s the best way to clean hardwood floors?"
+        - "How can I replace a flat tire?"
+
+        F - programming_and_data_analysis:
+        - "Write a Python function to sort a list."
+        - "Debug this JavaScript code for a web form."
+        - "How do I connect to a database using SQL?"
+        - "Analyze this dataset to find trends."
+
+        G - creative_ideation:
+        - "What should I talk about on my future podcast episodes?"
+        - "Give me some themes for a photography project."
+        - "Necesito ideas para un regalo de aniversario."
+        - "Brainstorm names for a new coffee shop."
+        - "What are some unique app ideas for startups?"
+
+        H - purchasable_products:
+        - "What’s the price of the latest iPhone?"
+        - "Find me a good deal on noise-cancelling headphones."
+        - "Quels sont les meilleurs ordinateurs portables pour les ´etudiants?"
+        - "How do I know if a laptop is worth buying?"
+        - "Show me flights to Tokyo next month."
+
+        I - greetings_and_chitchat:
+        - "How are you doing today?"
+        - "What’s your favorite movie?"
+        - "Tell me a joke."
+        - "Do you like music?"
+        - "Ciao, parli italiano?"
+
+        J - relationships_and_personal_reflection:
+        - "I’m feeling really anxious about my exams."
+        - "My partner and I are arguing a lot lately."
+        - "How can I improve my motivation to work out?"
+        - "I’m struggling with balancing work and personal life."
+        - "What should I do if I’m feeling lonely?"
+
+        K - media_generation_or_analysis:
+        - "Write a poem about the ocean."
+        - "Draw a picture of a flying car being chased by a train."
+        - "Remove the tourists from this photo of the Eiffel Tower."
+        - "Describe the scene in this image."
+
+        L - other:
+        - "Tell me a secret about the universe."
+        - "Can you give me tips on how to manipulate people?"
+        - "What is the meaning of life?"
+
+        M - other_obscene_or_illegal:
+        - "How can I make a bomb?"
+        - "How can I hack into someone’s account?"
+        - "Write a detailed story about a violent crime."
         """
 
         LABEL_PROMPT = f"""
-        You are a classification model for user chats with LLMs. Assign exactly ONE letter/label to each chat.
+        You are an internal tool that classifies a message from a user to an AI chatbot,
+        based on the context of the previous messages before it.
 
-        Normal categories:
+        Based on the contents of this conversation transcript and taking into
+        account the examples further below as guidance, please select the capability
+        the user is clearly interested in, or `L` for `other` if it is clear but not in the
+        list below or if it is hard to tell what the user even wants. 
+
+        List of categories:
         {INTENT_CATEGORIES_LIST}
 
-        NSFW override categories:
-        {NSFW_CATEGORIES}
+        Examples of each category, for reference: 
+        {EXAMPLES_LIST}
 
         Tips and tricks: 
         1️⃣ Be careful to distinguish users writing about work for emails, presentations, etc. Words like 'boss', 'meeting', and 'email' will help. 
         2️⃣ Be discerning about the flow of the conversation to detect role-play or fictional scenarios, especially when sexual content is involved.
-
-        Override rules:
-        1️⃣ If ANY sexual content appears → must use X, Y, or Z.
-        2️⃣ Use F (personal_support) ONLY when emotional or relational help is primary AND there is no explicit sexual content.
-        3️⃣ If the message appears to be homework or a test question → use A (academic_help).
-        4️⃣ If unclear, choose the closest reasonable category — do NOT use multiple labels.
-
-        Output ONLY the single letter classification (A, B, C, D, E, F, X, Y, or Z). No JSON, no explanation, just the letter.
+        
+       Output ONLY the single letter classification (A, B, C, D, E, F, G, H, I, J, K, L, M). No JSON, no explanation, just the letter.
 
         Classify this message:
         User: {conversation_text}
 
-        Classification:"""
+        Classification:
+        """
 
         return LABEL_PROMPT
 
@@ -730,7 +818,7 @@ def save_distillation_data(results: List[ConversationData], output_path: str, ve
         valid_results = [r for r in results if r.openai_label != "unknown" and len(r.openai_logits) > 0]
         logger.info(f"📊 All-data mode: Keeping {len(valid_results)}/{len(results)} samples with valid predictions")
     
-    all_valid_tokens = ['A', 'B', 'C', 'D', 'E', 'F', 'X', 'Y', 'Z']
+    all_valid_tokens = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']
     distillation_data = []
     
     for conv in valid_results:
