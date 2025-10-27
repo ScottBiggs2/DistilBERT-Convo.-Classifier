@@ -43,13 +43,24 @@ python src/extract_sequences.py
 python src/preprocess_sequences.py
 ```
 
+
+# Initial Labelling Approach: GPT 5 then 4o:
+However, now it is GPT 4o and GPT 4o-mini
 ```bash 
-python src/gpt_5_label.py 
+python src/get_gpt_4o_labels.py 
 ```
 
 ```bash
-python src/get_gpt_4o_logprobs.py
+python src/get_gpt_4o_mini_logprobs_verified.py
 ```
+
+# Alternative Labbelling Approach: GPT 4o-mini only: 
+
+```bash 
+python src/get_gpt_4o_mini_logprobs_unverified.py
+```
+
+# Then... 
 
 ```bash
 python src/train_distilBERT.py

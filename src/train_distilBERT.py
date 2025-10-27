@@ -167,12 +167,8 @@ class WeightedDistillationLoss:
         self.class_order = class_order
         self.class_to_idx = {cls: idx for idx, cls in enumerate(class_order)}
         
-        # Define NSFW and SFW classes
-        # self.nsfw_classes = {'X', 'Y', 'Z'}
         self.banned_classes = {'D', 'J', 'M'}
-        # self.sfw_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
         self.ok_classes = {'A', 'B', 'C' , 'E', 'F', 'G', 'H', 'I', 'K', 'L'}
-
         
         # Create confusion penalty matrix
         self.penalty_matrix = self._create_penalty_matrix()
