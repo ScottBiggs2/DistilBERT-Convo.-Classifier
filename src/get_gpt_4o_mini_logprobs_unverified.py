@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 OpenAI GPT-4o-mini Single-Pass Labeling and Logprob Extraction
-Directly adapted from working batch script - no verification logic
+Fixed version with proper timeout and interrupt handling
 """
 
 import json
@@ -11,6 +11,7 @@ import os
 import math
 import re
 import time
+import signal
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
@@ -38,11 +39,15 @@ class OpenAILabeler:
     """Single-pass labeling and logits extraction with OpenAI"""
     
     def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
-        self.client = openai.AsyncOpenAI(api_key=api_key)
+        # Disable built-in retries in OpenAI client
+        self.client = openai.AsyncOpenAI(
+            api_key=api_key,
+            max_retries=0  # CRITICAL: Disable automatic retries
+        )
         self.model = model
         self.valid_class_tokens = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'}
         
-        logger.info(f"✅ OpenAI client initialized")
+        logger.info(f"✅ OpenAI client initialized (retries disabled)")
         logger.info(f"🤖 Model: {model}")
     
     def create_classification_prompt(self, conversation_text: str) -> str:
@@ -114,7 +119,7 @@ class OpenAILabeler:
         
         return filtered_tokens, normalized_log_probs
     
-    async def process_with_realtime_api(self, conversations: List[Dict], max_concurrent: int = 50) -> List[ConversationData]:
+    async def process_with_realtime_api(self, conversations: List[Dict], max_concurrent: int = 5) -> List[ConversationData]:
         """Process with real-time API using concurrent batching with rate limiting"""
 
         logger.info(f"🔄 Using real-time API with {max_concurrent} concurrent requests...")
@@ -139,50 +144,65 @@ class OpenAILabeler:
         results = []
         start_time = time.time()
         active_tasks = set()
-        delay_between_starts = 0.2  # INCREASED to 200ms between starting each request
+        delay_between_starts = 0.2
         last_start_time = 0
         
-        for idx, (conv, text) in enumerate(task_inputs):
-            # Enforce minimum delay between starts
-            now = time.time()
-            time_since_last_start = now - last_start_time
-            if time_since_last_start < delay_between_starts:
-                await asyncio.sleep(delay_between_starts - time_since_last_start)
-            
-            # Create and start task
-            task = asyncio.create_task(process_with_limit(conv, text))
-            active_tasks.add(task)
-            last_start_time = time.time()
-            
-            # Collect completed tasks
-            done_tasks = {t for t in active_tasks if t.done()}
-            for done_task in done_tasks:
-                try:
-                    result = await done_task
-                    if result:
-                        results.append(result)
-                except Exception:
-                    pass
-            active_tasks -= done_tasks
-            
-            # Progress update
-            if (idx + 1) % 50 == 0 or (idx + 1) == len(task_inputs):
-                elapsed = time.time() - start_time
-                rate = (idx + 1) / elapsed if elapsed > 0 else 0
-                logger.info(f"   Progress: {idx + 1}/{len(task_inputs)} ({(idx + 1)/len(task_inputs)*100:.1f}%) | Rate: {rate:.1f} req/s")
+        try:
+            for idx, (conv, text) in enumerate(task_inputs):
+                # Enforce minimum delay between starts
+                now = time.time()
+                time_since_last_start = now - last_start_time
+                if time_since_last_start < delay_between_starts:
+                    await asyncio.sleep(delay_between_starts - time_since_last_start)
+                
+                # Create and start task
+                task = asyncio.create_task(process_with_limit(conv, text))
+                active_tasks.add(task)
+                last_start_time = time.time()
+                
+                # Collect completed tasks
+                done_tasks = {t for t in active_tasks if t.done()}
+                for done_task in done_tasks:
+                    try:
+                        result = await done_task
+                        if result:
+                            results.append(result)
+                    except Exception:
+                        pass
+                active_tasks -= done_tasks
+                
+                # Progress update
+                if (idx + 1) % 1000 == 0 or (idx + 1) == len(task_inputs):
+                    elapsed = time.time() - start_time
+                    rate = (idx + 1) / elapsed if elapsed > 0 else 0
+                    logger.info(f"   Progress: {idx + 1}/{len(task_inputs)} ({(idx + 1)/len(task_inputs)*100:.1f}%) | "
+                               f"Collected: {len(results)} | Active: {len(active_tasks)} | Rate: {rate:.1f} req/s")
         
-        # Wait for remaining tasks
+        except KeyboardInterrupt:
+            logger.warning("⚠️  KeyboardInterrupt detected during task launch!")
+            raise
+        
+        # Wait for remaining tasks with timeout
         if active_tasks:
-            remaining_results = await asyncio.gather(*active_tasks, return_exceptions=True)
-            for result in remaining_results:
-                if isinstance(result, ConversationData):
-                    results.append(result)
+            logger.info(f"⏳ Waiting for {len(active_tasks)} remaining tasks (max 2 min)...")
+            try:
+                remaining_results = await asyncio.wait_for(
+                    asyncio.gather(*active_tasks, return_exceptions=True),
+                    timeout=120.0
+                )
+                for result in remaining_results:
+                    if isinstance(result, ConversationData):
+                        results.append(result)
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️  Timeout! Cancelling {len(active_tasks)} stuck tasks")
+                for task in active_tasks:
+                    task.cancel()
         
         logger.info(f"✅ Successfully processed {len(results)}/{len(task_inputs)} conversations")
         return results
     
-    async def _process_single_realtime(self, conversation: Dict, text: str, max_retries: int = 3) -> Optional[ConversationData]:
-        """Process single conversation - COPIED FROM REFERENCE SCRIPT"""
+    async def _process_single_realtime(self, conversation: Dict, text: str, max_retries: int = 2) -> Optional[ConversationData]:
+        """Process single conversation with minimal retries"""
         
         prompt = self.create_classification_prompt(text)
         
@@ -195,7 +215,7 @@ class OpenAILabeler:
                     max_tokens=5,
                     logprobs=True,
                     top_logprobs=20,
-                    timeout=30.0
+                    timeout=15.0  # Reduced from 30s
                 )
                 
                 if not response.choices:
@@ -218,7 +238,7 @@ class OpenAILabeler:
                 if not predicted_label:
                     return None
                 
-                # Extract logprobs - EXACT COPY FROM REFERENCE
+                # Extract logprobs
                 raw_tokens = []
                 raw_logits = []
                 
@@ -259,19 +279,16 @@ class OpenAILabeler:
                     confidence=confidence
                 )
             
-            except openai.RateLimitError as e:
-                wait_time = min(2 ** attempt, 8)
-                logger.warning(f"Rate limit hit, waiting {wait_time}s before retry {attempt+1}/{max_retries}")
-                await asyncio.sleep(wait_time)
-                
-            except openai.APITimeoutError as e:
-                logger.warning(f"Timeout on attempt {attempt+1}/{max_retries}: {e}")
-                if attempt == max_retries - 1:
+            except openai.RateLimitError:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # 1s, 2s
+                else:
                     return None
-                await asyncio.sleep(1)
                 
-            except Exception as e:
-                logger.error(f"Error processing conversation (attempt {attempt+1}/{max_retries}): {e}")
+            except (openai.APITimeoutError, asyncio.TimeoutError):
+                return None  # Don't retry timeouts
+                
+            except Exception:
                 if attempt == max_retries - 1:
                     return None
                 await asyncio.sleep(0.5)
@@ -389,20 +406,23 @@ async def main():
     
     labeler = OpenAILabeler(OPENAI_API_KEY, model=MODEL)
     
+    results = []
     start_time = time.time()
-    results = await labeler.process_with_realtime_api(conversations, max_concurrent=MAX_CONCURRENT)
-    elapsed_time = time.time() - start_time
     
-    if not results:
-        logger.error("❌ No results")
-        return
-    
-    logger.info(f"⏱️  Total time: {elapsed_time/60:.1f}m ({len(results)/elapsed_time:.1f} req/s)")
-    
-    create_label_distribution_chart(results, DISTRIBUTION_CHART)
-    save_distillation_data(results, OUTPUT_FILE)
-    
-    logger.info("✅ Complete!")
+    try:
+        results = await labeler.process_with_realtime_api(conversations, max_concurrent=MAX_CONCURRENT)
+    except KeyboardInterrupt:
+        logger.warning("\n⚠️  KeyboardInterrupt! Saving partial results...")
+    finally:
+        elapsed_time = time.time() - start_time
+        
+        if results:
+            logger.info(f"⏱️  Total time: {elapsed_time/60:.1f}m ({len(results)/elapsed_time:.1f} req/s)")
+            create_label_distribution_chart(results, DISTRIBUTION_CHART)
+            save_distillation_data(results, OUTPUT_FILE)
+            logger.info("✅ Complete!")
+        else:
+            logger.error("❌ No results to save")
 
 if __name__ == "__main__":
     asyncio.run(main())

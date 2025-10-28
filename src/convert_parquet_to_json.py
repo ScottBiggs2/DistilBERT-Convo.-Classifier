@@ -14,7 +14,7 @@ def convert_parquet_to_json(parquet_path: str, json_path: str):
     try:
         # Read the Parquet file
         table = pq.read_table(parquet_path)
-        df = table.to_pandas()
+        df = table.to_pandas().head(20000)
         
         print(f"Successfully read Parquet file: {parquet_path}")
         print(f"Number of records: {len(df)}")

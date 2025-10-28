@@ -49,6 +49,12 @@ However, now it is GPT 4o and GPT 4o-mini
 ```bash 
 python src/get_gpt_4o_labels.py 
 ```
+Or
+
+```bash
+python src/get_gemini_flash_labels.py
+```
+
 
 ```bash
 python src/get_gpt_4o_mini_logprobs_verified.py
@@ -64,4 +70,22 @@ python src/get_gpt_4o_mini_logprobs_unverified.py
 
 ```bash
 python src/train_distilBERT.py
+```
+
+# To extract from Parquet: 
+```bash 
+python src/convert_parquet_to_json.py
+```
+Then run from the top.
+
+# JSONL to JSON: 
+
+Example 
+```bash
+python src/convert_jsonl_to_json.py data/gemini_2.5_flash_labelled.jsonl data/gemini_2.5_flash_labelled.json
+```
+
+Clean JSON files of errors: 
+```bash
+python src/filter_errors.py data/gemini_2.5_flash_labelled.json data/cleaned_gemini_2.5_flash_labelled.json
 ```
