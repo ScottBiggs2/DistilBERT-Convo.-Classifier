@@ -1,3 +1,5 @@
+# Run 1 - Bad labels (20k), alpha = 0.7, 5 epochs:
+
 Validation: 
 
 ```
@@ -38,9 +40,7 @@ weighted avg       0.66      0.66      0.65      2999
 2025-10-29 07:09:30,683 - INFO - 📊 Running comprehensive evaluation on test set...
 ```
 
-
 And Test:
-
 
 ```
 2025-10-29 07:10:27,319 - INFO - 
@@ -107,3 +107,79 @@ J - relationships_and_personal_reflection – Discuss emotions, relationships, o
 K - media_generation_or_analysis – Create, edit, analyze, or retrieve visual/audio/media content (images, photos, videos). 
 L - other – if there is no indication of what the user wants or if there is an intent that is not listed above; should be rare. e.g. suspicious requests, attempts to extract sensitive information.
 M - other_obscene_or_illegal - if the user is making obscene or illegal requests (including violence, drugs, bigotry, hate speech, etc); should be rare.
+
+# Better labels (where Gemini 2.5 Flash and GPT 4o mini agree):  
+
+2025-10-29 22:28:16,220 - INFO - 
+📋 VALIDATION CLASSIFICATION REPORT
+2025-10-29 22:28:16,221 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.88      0.91      0.89       394
+           B       0.92      0.85      0.88       157
+           C       0.66      0.59      0.62        88
+           D       0.90      0.91      0.91       276
+           E       0.63      0.82      0.71       118
+           F       0.90      0.77      0.83        56
+           G       0.72      0.68      0.70        19
+           H       0.78      0.33      0.47        21
+           I       0.92      0.81      0.86        54
+           J       0.79      0.83      0.81        88
+           K       0.95      0.58      0.72        36
+           L       0.33      0.33      0.33        24
+           M       0.73      0.79      0.76        14
+
+    accuracy                           0.83      1345
+   macro avg       0.78      0.71      0.73      1345
+weighted avg       0.83      0.83      0.83      1345
+
+2025-10-29 22:28:17,243 - INFO - 💾 Validation confusion matrix saved to models/distilbert_distilled/validation_confusion_matrix.png
+2025-10-29 22:28:17,243 - INFO - 
+🚨 VALIDATION BUSINESS IMPACT ANALYSIS:
+2025-10-29 22:28:17,243 - INFO -    Total predictions: 1345
+2025-10-29 22:28:17,243 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 22:28:17,244 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 22:28:17,244 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 22:28:17,244 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 22:28:17,244 - INFO -    Overall accuracy: 82.83%
+2025-10-29 22:28:17,245 - INFO - 💾 Validation results saved to models/distilbert_distilled/validation_results.json
+2025-10-29 22:28:17,245 - INFO - 🧪 Evaluating on held-out test set...
+2025-10-29 22:28:17,246 - INFO - 📊 Running comprehensive evaluation on test set...
+
+
+📋 TEST CLASSIFICATION REPORT
+2025-10-29 22:28:40,083 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.89      0.92      0.90       405
+           B       0.90      0.86      0.88       174
+           C       0.72      0.60      0.66       100
+           D       0.87      0.96      0.91       276
+           E       0.69      0.76      0.72       117
+           F       0.91      0.76      0.83        51
+           G       0.75      0.60      0.67        20
+           H       0.55      0.35      0.43        17
+           I       0.87      0.87      0.87        46
+           J       0.75      0.81      0.78        74
+           K       0.96      0.74      0.84        35
+           L       0.23      0.19      0.21        16
+           M       0.75      0.60      0.67        15
+
+    accuracy                           0.84      1346
+   macro avg       0.76      0.69      0.72      1346
+weighted avg       0.84      0.84      0.83      1346
+
+2025-10-29 22:28:41,085 - INFO - 💾 Test confusion matrix saved to models/distilbert_distilled/test_confusion_matrix.png
+2025-10-29 22:28:41,086 - INFO - 
+🚨 TEST BUSINESS IMPACT ANALYSIS:
+2025-10-29 22:28:41,086 - INFO -    Total predictions: 1346
+2025-10-29 22:28:41,086 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 22:28:41,086 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 22:28:41,086 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 22:28:41,086 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 22:28:41,086 - INFO -    Overall accuracy: 83.80%
+2025-10-29 22:28:41,088 - INFO - 💾 Test results saved to models/distilbert_distilled/test_results.json
+
+
+# BERT Multilingual: 
+

@@ -50,7 +50,7 @@ class DistillationConfig:
     """Configuration for knowledge distillation training"""
     
     # Model configuration
-    model_name: str = "distilbert-base-uncased"
+    model_name: str = "google-bert/bert-base-multilingual-cased" # "distilbert-base-uncased"
     max_length: int = 512
     num_labels: int = 13
     
