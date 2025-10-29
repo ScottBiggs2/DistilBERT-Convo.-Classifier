@@ -183,3 +183,75 @@ weighted avg       0.84      0.84      0.83      1346
 
 # BERT Multilingual: 
 
+📋 VALIDATION CLASSIFICATION REPORT
+2025-10-29 23:20:28,699 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.69      0.82      0.75       394
+           B       0.81      0.80      0.81       157
+           C       0.31      0.12      0.18        88
+           D       0.85      0.85      0.85       276
+           E       0.43      0.64      0.51       118
+           F       0.85      0.59      0.69        56
+           G       0.50      0.32      0.39        19
+           H       1.00      0.05      0.09        21
+           I       0.82      0.76      0.79        54
+           J       0.73      0.69      0.71        88
+           K       0.59      0.28      0.38        36
+           L       0.30      0.25      0.27        24
+           M       0.53      0.57      0.55        14
+
+    accuracy                           0.70      1345
+   macro avg       0.65      0.52      0.54      1345
+weighted avg       0.70      0.70      0.68      1345
+
+2025-10-29 23:20:29,713 - INFO - 💾 Validation confusion matrix saved to models/distilbert_distilled/validation_confusion_matrix.png
+2025-10-29 23:20:29,713 - INFO - 
+🚨 VALIDATION BUSINESS IMPACT ANALYSIS:
+2025-10-29 23:20:29,714 - INFO -    Total predictions: 1345
+2025-10-29 23:20:29,714 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 23:20:29,714 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 23:20:29,714 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 23:20:29,714 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 23:20:29,714 - INFO -    Overall accuracy: 69.52%
+2025-10-29 23:20:29,715 - INFO - 💾 Validation results saved to models/distilbert_distilled/validation_results.json
+2025-10-29 23:20:29,715 - INFO - 🧪 Evaluating on held-out test set...
+2025-10-29 23:20:29,716 - INFO - 📊 Running comprehensive evaluation on test set...
+
+
+📋 TEST CLASSIFICATION REPORT
+2025-10-29 23:20:53,345 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.72      0.80      0.76       405
+           B       0.83      0.79      0.81       174
+           C       0.35      0.14      0.20       100
+           D       0.82      0.90      0.86       276
+           E       0.40      0.60      0.48       117
+           F       0.84      0.53      0.65        51
+           G       0.46      0.30      0.36        20
+           H       0.00      0.00      0.00        17
+           I       0.78      0.67      0.72        46
+           J       0.73      0.72      0.72        74
+           K       0.62      0.43      0.51        35
+           L       0.15      0.19      0.17        16
+           M       0.75      0.40      0.52        15
+
+    accuracy                           0.69      1346
+   macro avg       0.57      0.50      0.52      1346
+weighted avg       0.68      0.69      0.68      1346
+
+2025-10-29 23:20:54,339 - INFO - 💾 Test confusion matrix saved to models/distilbert_distilled/test_confusion_matrix.png
+2025-10-29 23:20:54,340 - INFO - 
+🚨 TEST BUSINESS IMPACT ANALYSIS:
+2025-10-29 23:20:54,340 - INFO -    Total predictions: 1346
+2025-10-29 23:20:54,340 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 23:20:54,341 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 23:20:54,341 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 23:20:54,341 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 23:20:54,341 - INFO -    Overall accuracy: 69.39%
+2025-10-29 23:20:54,342 - INFO - 💾 Test results saved to models/distilbert_distilled/test_results.json
+2025-10-29 23:20:54,342 - INFO - 
+
+# DistilBERT Multilingual: 
+
