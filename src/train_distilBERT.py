@@ -146,7 +146,7 @@ class ConversationDataset(Dataset):
         )
         
         # Hard label (ground truth)
-        hard_label = self.class_to_idx.get(item['hard_label'], 0)
+        hard_label = self.class_to_idx.get(item['teacher_prediction'], 0)
         
         # Soft labels (teacher predictions) - ensure it's a proper tensor
         soft_labels = torch.tensor(item['soft_labels'], dtype=torch.float32)
@@ -304,40 +304,32 @@ class DistilBERTDistillation:
         logger.info(f"📊 Number of parameters: {sum(p.numel() for p in self.model.parameters()):,}")
     
     def load_distillation_data(self, data_path: str) -> Tuple[List[Dict], List[str]]:
-        """Load knowledge distillation data"""
+        """Load knowledge distillation data from a JSON file."""
         
         logger.info(f"Loading distillation data from {data_path}")
         
         with open(data_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        # Handle different data formats
-        if 'distillation_ready' in data:
+        if 'distillation_ready' in data and isinstance(data['distillation_ready'], list):
             distillation_samples = data['distillation_ready']
-            class_order = data['metadata'].get('class_order', ['A', 'B', 'C', 'D', 'E', 'F', 'X', 'Y', 'Z'])
-            agreement_rate = data['metadata'].get('agreement_rate', 'unknown')
-        elif 'samples' in data:
-            # Handle direct samples format
-            distillation_samples = data['samples']
-            class_order = data.get('class_order', ['A', 'B', 'C', 'D', 'E', 'F', 'X', 'Y', 'Z'])
-            agreement_rate = 'unknown'
         else:
-            # Handle list format or other formats
-            if isinstance(data, list):
-                distillation_samples = data
-            else:
-                raise ValueError(f"Unexpected data format in {data_path}")
-            class_order = ['A', 'B', 'C', 'D', 'E', 'F', 'X', 'Y', 'Z']
-            agreement_rate = 'unknown'
-        
+            raise ValueError(f"Expected a JSON file with a 'distillation_ready' key containing a list of samples in {data_path}")
+
+        if not distillation_samples:
+            raise ValueError(f"No samples found in 'distillation_ready' list in {data_path}")
+
+        # Extract class_order from the first sample
+        class_order = distillation_samples[0].get('class_order')
+        if not class_order:
+            raise ValueError("`class_order` not found in the first sample of the data.")
+
+        # Assuming agreement rate is not essential for training, but we can check for it
+        agreement_rate = distillation_samples[0].get('agreement', 'unknown')
+
         logger.info(f"📊 Loaded {len(distillation_samples)} distillation samples")
         logger.info(f"🏷️  Classes: {class_order}")
-        logger.info(f"📈 Teacher agreement rate: {agreement_rate}")
-        
-        if len(distillation_samples) == 0:
-            logger.error(f"❌ No samples found in {data_path}")
-            logger.error(f"📄 Data keys: {list(data.keys()) if isinstance(data, dict) else 'List format'}")
-            raise ValueError("No distillation samples found in data file")
+        logger.info(f"📈 Teacher agreement rate from first sample: {agreement_rate}")
         
         return distillation_samples, class_order
     

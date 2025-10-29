@@ -25,7 +25,7 @@ load_dotenv()
 
 INPUT_FILE = "data/cleaned_sequences.json"
 # Updated to .json as requested by user
-LABELED_OUTPUT = "data/gemini_2.5_flash_labelled.jsonl" # Switched to .jsonl for robustness
+LABELED_OUTPUT = "data/gemini_2.5_flash_labelled.json" 
 
 BATCH_SIZE = int(os.getenv("LABEL_BATCH_SIZE", 32)) # Gemini can handle high concurrency
 REQUEST_TIMEOUT = 30  # seconds
@@ -54,7 +54,7 @@ GENERATION_CONFIG = {
 }
 
 gemini_model = genai.GenerativeModel(
-    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     generation_config=GENERATION_CONFIG,
     safety_settings=SAFETY_SETTINGS
 )
@@ -281,103 +281,79 @@ async def main():
     except json.JSONDecodeError:
         logger.error(f"❌ Could not decode JSON from: {INPUT_FILE}")
         return
-
-    # --- Resume logic ---
-    labeled_all = []
-    processed_sequences = set()
-    if os.path.exists(LABELED_OUTPUT):
-        print(f"🔎 Found existing output file: {LABELED_OUTPUT}. Resuming...")
-        with open(LABELED_OUTPUT, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    if line.strip():
-                        existing_item = json.loads(line)
-                        labeled_all.append(existing_item)
-                        if "sequence" in existing_item:
-                            processed_sequences.add(existing_item["sequence"])
-                except json.JSONDecodeError:
-                    logger.warning(f"Could not parse line in {LABELED_OUTPUT}: {line.strip()}")
-        print(f"✅ Resumed {len(processed_sequences):,} previously labeled conversations.")
-
-    # Filter out already processed items
-    unprocessed_data = [item for item in data if item.get("sequence", "") not in processed_sequences]
-    total_items_to_process = len(unprocessed_data)
+        
+    total_items = len(data)
+    print(f"📂 Loaded {total_items:,} conversation sequences from {INPUT_FILE}")
     
-    if total_items_to_process == 0:
-        print("✅ All conversations are already labeled.")
-    else:
-        print(f"📂 Loaded {len(data):,} total conversations, {total_items_to_process:,} remaining to label.")
-
     # Confirm for large datasets
-    if total_items_to_process > 1000:
-        print(f"⚠️  Large dataset detected ({total_items_to_process:,} conversations remaining)")
-        print(f"⚠️  Progress will be saved after each batch to {LABELED_OUTPUT}.")
-        estimated_time = (total_items_to_process / BATCH_SIZE) * 0.5 
+    if total_items > 1000:
+        print(f"⚠️  Large dataset detected ({total_items:,} conversations)")
+        print(f"⚠️  All results will be stored in memory before saving.")
+        print(f"⚠️  If the script fails, all progress will be lost.")
+        estimated_time = (total_items / BATCH_SIZE) * 0.5 
         print(f"⏱️  Estimated processing time: {estimated_time / 60:.1f} minutes (at {BATCH_SIZE} per batch)")
         
         response = input("Continue with Gemini labeling? (y/N): ")
         if response.lower() != 'y':
             print("❌ Processing cancelled by user")
             return
-
-    if total_items_to_process > 0:
-        # --- Labeling with Gemini ---
-        print(f"\n🧩 Starting Gemini 2.5 Flash labeling (batch size: {BATCH_SIZE})...")
-        start_time = time.perf_counter()
-
-        newly_labeled_count = 0
-        
-        # Open output file in append mode
-        with open(LABELED_OUTPUT, "a", encoding="utf-8") as f_out:
-            for i in tqdm.tqdm(range(0, total_items_to_process, BATCH_SIZE), desc="Gemini Labeling"):
-                batch = unprocessed_data[i:i + BATCH_SIZE]
-                results = await label_batch(batch) # results is a list of dicts
-
-                # --- Update stats and save results from this batch ---
-                for item in results:
-                    # Append to file
-                    f_out.write(json.dumps(item, ensure_ascii=False) + "\n")
-                    
-                    # Add to in-memory list for final report
-                    labeled_all.append(item)
-                    newly_labeled_count += 1
-
-                await asyncio.sleep(0.1)
-
-        elapsed = time.perf_counter() - start_time
-        
-        print(f"\n- Done with this run. Newly labeled: {newly_labeled_count}")
-        if elapsed > 0:
-            print(f"- Average rate: {newly_labeled_count/elapsed:.1f} labels/second")
-
-
-    # --- Final summary based on all data (resumed + new) ---
-    total_labeled = len(labeled_all)
-    total_ok = sum(1 for item in labeled_all if item["status"] == "ok")
-    total_err = total_labeled - total_ok
+    
+    # --- Labeling with Gemini ---
+    print(f"\n🧩 Starting Gemini 2.5 Flash labeling (batch size: {BATCH_SIZE})...")
+    start_time = time.perf_counter()
+    
+    # --- This list will hold ALL results in memory ---
+    labeled_all = []
+    
+    # Stats counters
+    ok_count = 0
+    err_count = 0
     intent_counts = {}
-    for item in labeled_all:
-        if item["status"] == "ok":
-            intent = item.get("intent", "unclear")
-            intent_counts[intent] = intent_counts.get(intent, 0) + 1
 
-    print(f"\n\n--- Overall Summary ---")
-    print(f"\n📊 Total Labeled Results in {LABELED_OUTPUT}:")
-    print(f"   ✅ Total successful labels: {total_ok:,} / {len(data):,}")
-    print(f"   ❌ Total errors: {total_err:,}")
-    if len(data) > 0:
-        # Calculate success rate based on total items attempted so far
-        success_rate = total_ok / total_labeled * 100 if total_labeled > 0 else 0
-        print(f"   📈 Overall success rate: {success_rate:.1f}%")
+    for i in tqdm.tqdm(range(0, total_items, BATCH_SIZE), desc="Gemini Labeling"):
+        batch = data[i:i + BATCH_SIZE]
+        results = await label_batch(batch) # results is a list of dicts
+        
+        # --- Update stats from this batch ---
+        for item in results:
+            if item["status"] == "ok":
+                ok_count += 1
+                intent = item.get("intent", "unclear")
+                intent_counts[intent] = intent_counts.get(intent, 0) + 1
+            else:
+                err_count += 1
+        
+        # --- Add batch results to the main list ---
+        labeled_all.extend(results)
+        
+        await asyncio.sleep(0.1) 
+    
+    elapsed = time.perf_counter() - start_time
 
+    # --- Results summary ---
+    print(f"\n📊 Gemini Labeling Results:")
+    print(f"   ✅ Successful labels: {ok_count:,} / {total_items:,}")
+    print(f"   ❌ Errors: {err_count:,}")
+    if total_items > 0:
+        print(f"   📈 Success rate: {ok_count/total_items*100:.1f}%")
+    print(f"   ⌛ Total time: {elapsed/60:.1f} minutes")
+    if elapsed > 0:
+        print(f"   🚀 Average rate: {total_items/elapsed:.1f} labels/second")
+    
     # Label distribution
-    if total_ok > 0:
-        print(f"\n🏷️  Overall Label Distribution:")
+    if ok_count > 0:
+        print(f"\n🏷️  Label Distribution:")
         for intent, count in sorted(intent_counts.items()):
-            percentage = count / total_ok * 100
+            percentage = count / ok_count * 100
             print(f"   {intent}: {count:,} ({percentage:.1f}%)")
     
-    print(f"\n✅ All processing complete. Results saved to {LABELED_OUTPUT}")
+    # --- Save all results to a single JSON file at the end ---
+    print(f"\n💾 Saving {len(labeled_all):,} results to {LABELED_OUTPUT}...")
+    os.makedirs("data", exist_ok=True)
+    with open(LABELED_OUTPUT, "w", encoding="utf-8") as f:
+        json.dump(labeled_all, f, indent=2, ensure_ascii=False)
+    
+    print(f"\n✅ Gemini labeled data saved to {LABELED_OUTPUT}")
     print(f"🎯 Ready for knowledge distillation pipeline!")
 
 if __name__ == "__main__":

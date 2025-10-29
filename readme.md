@@ -89,3 +89,8 @@ Clean JSON files of errors:
 ```bash
 python src/filter_errors.py data/gemini_2.5_flash_labelled.json data/cleaned_gemini_2.5_flash_labelled.json
 ```
+
+If you run them seperately: 
+```bash
+python src/compare_and_filter.py
+```
