@@ -335,7 +335,7 @@ class DistilBERTDistillation:
         return distillation_samples, class_order
     
     def create_datasets(self, samples: List[Dict], class_order: List[str], 
-                       train_split: float = 0.7, val_split: float = 0.15, 
+                       train_split: float = 0.8, val_split: float = 0.1, 
                        save_splits: bool = True) -> Tuple[ConversationDataset, ConversationDataset, ConversationDataset]:
         """Create train, validation, and test datasets with proper holdout"""
         
