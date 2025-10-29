@@ -96,6 +96,8 @@ jupyter>=1.0.0
 matplotlib>=3.5.0
 seaborn>=0.11.0
 
+wandb
+
 # Optional: For advanced optimization
 # intel-extension-for-pytorch  # Uncomment for Intel CPU optimization
 # mkl  # Uncomment for Intel MKL support

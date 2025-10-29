@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
+import wandb
 
 from transformers import (
     DistilBertTokenizer, 
@@ -420,7 +421,7 @@ class DistilBERTDistillation:
             metric_for_best_model="eval_loss",
             greater_is_better=False,
             save_total_limit=3,
-            report_to=None,
+            report_to="wandb",  # Report to wandb
             dataloader_num_workers=0,
             logging_dir=os.path.join(output_dir, "logs"),
             remove_unused_columns=False,  # THIS IS THE KEY FIX!
@@ -574,49 +575,61 @@ class DistilBERTDistillation:
         
         return eval_results
     
-    def prepare_for_onnx(self, model_dir: str):
-        """Prepare model configuration for easy ONNX export"""
+    def export_to_onnx(self, model_dir: str, class_order: List[str]):
+        """Export the model to ONNX format"""
         
-        # Save model configuration for ONNX export
-        onnx_config = {
-            'model_type': 'distilbert',
-            'model_name': self.config.model_name,
-            'num_labels': self.config.num_labels,
-            'max_length': self.config.max_length,
-            'class_order': None,  # Will be filled during training
-            'export_command': f"""
-# ONNX Export Command:
-python -c "
-from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
-import torch
-
-model = DistilBertForSequenceClassification.from_pretrained('{model_dir}')
-tokenizer = DistilBertTokenizer.from_pretrained('{model_dir}')
-
-# Dummy input for tracing
-dummy_input = tokenizer('sample text', return_tensors='pt', max_length={self.config.max_length}, padding='max_length', truncation=True)
-
-# Export to ONNX
-torch.onnx.export(
-    model,
-    tuple(dummy_input.values()),
-    '{model_dir}/model.onnx',
-    input_names=['input_ids', 'attention_mask'],
-    output_names=['logits'],
-    dynamic_axes={{'input_ids': {{0: 'batch_size'}}, 'attention_mask': {{0: 'batch_size'}}, 'logits': {{0: 'batch_size'}}}},
-    opset_version=11
-)
-print('ONNX model exported successfully!')
-"
-""".strip()
-        }
+        logger.info(f"🚀 Exporting model to ONNX format...")
         
-        config_path = os.path.join(model_dir, 'onnx_export_config.json')
-        with open(config_path, 'w') as f:
-            json.dump(onnx_config, f, indent=2)
-        
-        logger.info(f"💾 ONNX export configuration saved to {config_path}")
-        logger.info("🎯 Ready for ONNX export! Run the command in onnx_export_config.json")
+        try:
+            # Load the trained model and tokenizer
+            model = DistilBertForSequenceClassification.from_pretrained(model_dir)
+            tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
+            
+            # Create a dummy input for tracing
+            dummy_text = "This is a sample text for ONNX export."
+            dummy_input = tokenizer(
+                dummy_text, 
+                return_tensors='pt', 
+                max_length=self.config.max_length, 
+                padding='max_length', 
+                truncation=True
+            )
+            
+            onnx_path = os.path.join(model_dir, "model.onnx")
+            
+            # Export to ONNX
+            torch.onnx.export(
+                model,
+                tuple(dummy_input.values()),
+                onnx_path,
+                input_names=['input_ids', 'attention_mask'],
+                output_names=['logits'],
+                dynamic_axes={
+                    'input_ids': {0: 'batch_size'},
+                    'attention_mask': {0: 'batch_size'},
+                    'logits': {0: 'batch_size'}
+                },
+                opset_version=11
+            )
+            
+            logger.info(f"✅ ONNX model exported successfully to {onnx_path}")
+            
+            # Save class order with ONNX model for inference
+            onnx_config_path = os.path.join(model_dir, 'onnx_config.json')
+            onnx_config = {
+                'class_order': class_order,
+                'max_length': self.config.max_length
+            }
+            with open(onnx_config_path, 'w') as f:
+                json.dump(onnx_config, f, indent=2)
+            
+            logger.info(f"💾 ONNX configuration with class order saved to {onnx_config_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to export to ONNX: {e}")
+            # Log error to wandb if initialized
+            if wandb.run:
+                wandb.log({"onnx_export_error": str(e)})
 
 async def main():
     """Main training function with immediate post-training evaluation"""
@@ -624,6 +637,16 @@ async def main():
     # Configuration
     DATA_PATH = os.getenv("DISTILLATION_DATA_PATH", "data/distillation_data.json")
     OUTPUT_DIR = os.getenv("MODEL_OUTPUT_DIR", "models/distilbert_distilled")
+    
+    # Initialize wandb
+    wandb.init(
+        project="distilbert-conversation-classifier",
+        name=f"distilbert-distilled-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        config={
+            "data_path": DATA_PATH,
+            "output_dir": OUTPUT_DIR,
+        }
+    )
     
     config = DistillationConfig(
         batch_size=int(os.getenv("BATCH_SIZE", "16")),
@@ -694,8 +717,8 @@ async def main():
     test_acceptable = test_cross_error < 0.05 and test_accuracy > 0.75
     logger.info(f"🏭 Production Readiness: {'✅ READY' if test_acceptable else '⚠️  NEEDS IMPROVEMENT'}")
     
-    # Prepare for ONNX
-    distiller.prepare_for_onnx(OUTPUT_DIR)
+    # Export to ONNX
+    distiller.export_to_onnx(OUTPUT_DIR, class_order)
     
     # Save comprehensive training summary
     training_summary = {
@@ -742,6 +765,26 @@ async def main():
     logger.info("✅ Training pipeline complete!")
     logger.info(f"📊 Comprehensive summary saved to: {summary_path}")
     logger.info("🎯 Model ready for production deployment and ONNX export!")
+    
+    # Log artifacts to wandb
+    wandb.log({"training_summary": training_summary})
+    wandb.log_artifact(summary_path, name="training_summary", type="results")
+    wandb.log_artifact(os.path.join(OUTPUT_DIR, "validation_confusion_matrix.png"), name="validation_confusion_matrix", type="image")
+    wandb.log_artifact(os.path.join(OUTPUT_DIR, "test_confusion_matrix.png"), name="test_confusion_matrix", type="image")
+    wandb.log_artifact(os.path.join(OUTPUT_DIR, "validation_results.json"), name="validation_results", type="results")
+    wandb.log_artifact(os.path.join(OUTPUT_DIR, "test_results.json"), name="test_results", type="results")
+    wandb.log_artifact(os.path.join(OUTPUT_DIR, "onnx_export_config.json"), name="onnx_export_config", type="config")
+    
+    # Log model artifact
+    model_artifact = wandb.Artifact(
+        "distilbert-distilled-model", 
+        type="model",
+        description="Distilled DistilBERT model for conversation classification"
+    )
+    model_artifact.add_dir(OUTPUT_DIR)
+    wandb.log_artifact(model_artifact)
+    
+    wandb.finish()
     
     return training_summary
 

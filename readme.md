@@ -94,3 +94,8 @@ If you run them seperately:
 ```bash
 python src/compare_and_filter.py
 ```
+
+# Save as ONNX:
+```bash
+python src/export_to_onnx.py --model-path models/distilbert_intent_classifier --output-path models/onnx_intent_classifier --benchmark --test
+```
