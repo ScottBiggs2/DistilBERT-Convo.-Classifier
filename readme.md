@@ -72,6 +72,12 @@ python src/get_gpt_4o_mini_logprobs_unverified.py
 python src/train_distilBERT.py
 ```
 
+Or...
+
+```bash
+python src/train_1024_distilBERT.py
+```
+
 # To extract from Parquet: 
 ```bash 
 python src/convert_parquet_to_json.py
