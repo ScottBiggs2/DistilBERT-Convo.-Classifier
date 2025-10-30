@@ -31,3 +31,10 @@ build/
 *.egg-info/
 *.parquet
 *.png
+
+# 
+logs/
+temp/
+*.pid
+*.err
+*.out

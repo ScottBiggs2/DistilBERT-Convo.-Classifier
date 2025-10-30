@@ -254,4 +254,84 @@ weighted avg       0.68      0.69      0.68      1346
 2025-10-29 23:20:54,342 - INFO - 
 
 # DistilBERT Multilingual: 
+📋 VALIDATION CLASSIFICATION REPORT
+2025-10-29 23:48:17,895 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.88      0.91      0.90       394
+           B       0.89      0.82      0.85       157
+           C       0.62      0.66      0.64        88
+           D       0.86      0.93      0.90       276
+           E       0.65      0.75      0.70       118
+           F       0.86      0.77      0.81        56
+           G       0.71      0.63      0.67        19
+           H       0.50      0.33      0.40        21
+           I       0.91      0.78      0.84        54
+           J       0.87      0.74      0.80        88
+           K       0.79      0.53      0.63        36
+           L       0.27      0.29      0.28        24
+           M       0.79      0.79      0.79        14
+
+    accuracy                           0.82      1345
+   macro avg       0.74      0.69      0.71      1345
+weighted avg       0.82      0.82      0.81      1345
+
+2025-10-29 23:48:18,921 - INFO - 💾 Validation confusion matrix saved to models/distilbert_distilled/validation_confusion_matrix.png
+2025-10-29 23:48:18,922 - INFO - 
+🚨 VALIDATION BUSINESS IMPACT ANALYSIS:
+2025-10-29 23:48:18,922 - INFO -    Total predictions: 1345
+2025-10-29 23:48:18,922 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 23:48:18,922 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 23:48:18,923 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 23:48:18,923 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 23:48:18,923 - INFO -    Overall accuracy: 81.56%
+2025-10-29 23:48:18,924 - INFO - 💾 Validation results saved to models/distilbert_distilled/validation_results.json
+2025-10-29 23:48:18,924 - INFO - 🧪 Evaluating on held-out test set...
+2025-10-29 23:48:18,925 - INFO - 📊 Running comprehensive evaluation on test set...
+
+
+📋 TEST CLASSIFICATION REPORT
+2025-10-29 23:48:38,607 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.87      0.88      0.88       405
+           B       0.90      0.84      0.87       174
+           C       0.57      0.60      0.58       100
+           D       0.89      0.93      0.91       276
+           E       0.62      0.68      0.65       117
+           F       0.94      0.67      0.78        51
+           G       0.68      0.75      0.71        20
+           H       0.38      0.47      0.42        17
+           I       0.92      0.78      0.85        46
+           J       0.84      0.76      0.79        74
+           K       0.97      0.80      0.88        35
+           L       0.22      0.38      0.28        16
+           M       0.89      0.53      0.67        15
+
+    accuracy                           0.81      1346
+   macro avg       0.75      0.70      0.71      1346
+weighted avg       0.82      0.81      0.81      1346
+
+2025-10-29 23:48:39,610 - INFO - 💾 Test confusion matrix saved to models/distilbert_distilled/test_confusion_matrix.png
+2025-10-29 23:48:39,611 - INFO - 
+🚨 TEST BUSINESS IMPACT ANALYSIS:
+2025-10-29 23:48:39,611 - INFO -    Total predictions: 1346
+2025-10-29 23:48:39,612 - INFO -    Cross-category errors (NSFW/SFW): 0
+2025-10-29 23:48:39,613 - INFO -    Cross-category error rate: 0.00%
+2025-10-29 23:48:39,613 - INFO -    NSFW recall errors (missed NSFW): 0
+2025-10-29 23:48:39,613 - INFO -    NSFW precision errors (false NSFW): 0
+2025-10-29 23:48:39,613 - INFO -    Overall accuracy: 81.05%
+2025-10-29 23:48:39,615 - INFO - 💾 Test results saved to models/distilbert_distilled/test_results.json
+2025-10-29 23:48:39,615 - INFO - 
+============================================================
+2025-10-29 23:48:39,615 - INFO - TRAINING COMPLETION SUMMARY
+2025-10-29 23:48:39,615 - INFO - ============================================================
+2025-10-29 23:48:39,615 - INFO - 🎯 Validation Accuracy: 0.816
+2025-10-29 23:48:39,616 - INFO - 🧪 Test Accuracy: 0.811
+2025-10-29 23:48:39,616 - INFO - 📉 Accuracy Drop: 0.005 (✅ OK)
+2025-10-29 23:48:39,616 - INFO - 🚨 Validation Cross-Category Errors: 0.000
+2025-10-29 23:48:39,616 - INFO - 🚨 Test Cross-Category Errors: 0.000
+2025-10-29 23:48:39,616 - INFO - 🏭 Production Readiness: ✅ READY
+2025-10-29 23:48:39,616 - INFO - 🚀 Exporting model to ONNX format...
+
 

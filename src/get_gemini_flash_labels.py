@@ -171,6 +171,8 @@ M - other_obscene_or_illegal:
 LABEL_PROMPT = """
 You are an internal tool that classifies a message from a user to an AI chatbot,
 based on the context of the previous messages before it.
+The messages you are labelling are truncated and preprocessed, and may not follow regular grammar rules smoothly. 
+
 
 Based on the contents of this conversation transcript and taking into
 account the examples further below as guidance, please select the capability
@@ -184,8 +186,9 @@ Examples of each category, for reference:
 {examples_list}
 
 Tips and tricks: 
-1️⃣ Be careful to distinguish users writing about work for emails, presentations, etc. Words like 'boss', 'meeting', and 'email' will help. 
-2️⃣ Be discerning about the flow of the conversation to detect role-play or fictional scenarios, especially when sexual content is involved.
+* Be careful to distinguish users writing about work for emails, presentations, etc. Words like 'boss', 'meeting', and 'email' will help. 
+* Be discerning about the flow of the conversation to detect role-play or fictional scenarios, especially when sexual content is involved.
+* Your labels will be used to ban services to categories D, J, and M. If you suspect a chat may fall into one of those categories, consider it seriously. 
 
 Output ONLY in this JSON format with a SINGLE LETTER from the listed intent categories:
 {json_example}

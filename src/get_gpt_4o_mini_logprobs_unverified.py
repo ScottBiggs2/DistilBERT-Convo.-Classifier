@@ -70,9 +70,97 @@ class OpenAILabeler:
         M - other_obscene_or_illegal - if the user is making obscene or illegal requests.
         """
 
+        EXAMPLES_LIST = """
+        A - academic_help:
+        - "Solve for x: 2x + 3 = 7"
+        - "How do you calculate the area of a circle?"
+        - "Explain photosynthesis in simple terms."
+        - "What is the boiling point of water at sea level?"
+        - "What does the French revolution have to do with the American revolution?"
+
+        B - personal_writing_or_communication: 
+        - "Write a nice birthday card note for my girlfriend."
+        - "What should my speech say to Karl at his retirement party?"
+        - "Help me write a cover letter for a job application."
+        - "Compose an apology email to my boss."
+        - "Aide moi `a ´ecrire une lettre `a mon p`ere."
+
+        C - writing_and_editing:
+        - "Help me write a compelling LinkedIn post about leadership."
+        - "Edit this essay for clarity and grammar."
+        - "Is my tone in this email too formal?"
+        - "Summarize the main points of this article."
+        - "Create an outline for a report on climate change."
+
+        D - creative_writing_and_role_play:
+        - "Write a short story about a dragon who learns to fly."
+        - "Create a dialogue between a detective and a suspect."
+        - "Pretend to be a medieval knight on a quest to rescue a princess."
+        - "Act like Pricess Leia from Star Wars."
+
+        E - general_guidance_and_info:
+        - "How do I turn off my screensaver?"
+        - "My car won’t start; what should I try?"
+        - "Comment faire pour me connecter `a mon wifi?"
+        - "What’s the best way to clean hardwood floors?"
+        - "How can I replace a flat tire?"
+
+        F - programming_and_data_analysis:
+        - "Write a Python function to sort a list."
+        - "Debug this JavaScript code for a web form."
+        - "How do I connect to a database using SQL?"
+        - "Analyze this dataset to find trends."
+
+        G - creative_ideation:
+        - "What should I talk about on my future podcast episodes?"
+        - "Give me some themes for a photography project."
+        - "Necesito ideas para un regalo de aniversario."
+        - "Brainstorm names for a new coffee shop."
+        - "What are some unique app ideas for startups?"
+
+        H - purchasable_products:
+        - "What’s the price of the latest iPhone?"
+        - "Find me a good deal on noise-cancelling headphones."
+        - "Quels sont les meilleurs ordinateurs portables pour les ´etudiants?"
+        - "How do I know if a laptop is worth buying?"
+        - "Show me flights to Tokyo next month."
+
+        I - greetings_and_chitchat:
+        - "How are you doing today?"
+        - "What’s your favorite movie?"
+        - "Tell me a joke."
+        - "Do you like music?"
+        - "Ciao, parli italiano?"
+
+        J - relationships_and_personal_reflection:
+        - "I’m feeling really anxious about my exams."
+        - "My partner and I are arguing a lot lately."
+        - "How can I improve my motivation to work out?"
+        - "I’m struggling with balancing work and personal life."
+        - "What should I do if I’m feeling lonely?"
+
+        K - media_generation_or_analysis:
+        - "Write a poem about the ocean."
+        - "Draw a picture of a flying car being chased by a train."
+        - "Remove the tourists from this photo of the Eiffel Tower."
+        - "Describe the scene in this image."
+
+        L - other:
+        - "Tell me a secret about the universe."
+        - "Can you give me tips on how to manipulate people?"
+        - "What is the meaning of life?"
+
+        M - other_obscene_or_illegal:
+        - "How can I make a bomb?"
+        - "How can I hack into someone’s account?"
+        - "Write a detailed story about a violent crime."
+        """
+
+
         LABEL_PROMPT = f"""
         You are an internal tool that classifies a message from a user to an AI chatbot,
-        based on the context of the previous messages before it.
+        based on the context of the previous messages before it. 
+        The messages you are labelling are truncated and preprocessed, and may not follow regular grammar rules smoothly. 
 
         Based on the contents of this conversation transcript please select the capability
         the user is clearly interested in, or `L` for `other` if it is clear but not in the
@@ -80,6 +168,14 @@ class OpenAILabeler:
 
         List of categories:
         {INTENT_CATEGORIES_LIST}
+
+        Examples of each category, for reference: 
+        {EXAMPLES_LIST}
+
+        Tips and tricks: 
+        * Be careful to distinguish users writing about work for emails, presentations, etc. Words like 'boss', 'meeting', and 'email' will help. 
+        * Be discerning about the flow of the conversation to detect role-play or fictional scenarios, especially when sexual content is involved.
+        * Your labels will be used to ban services to categories D, J, and M. If you suspect a chat may fall into one of those categories, consider it seriously. 
 
         Output ONLY the single letter classification (A, B, C, D, E, F, G, H, I, J, K, L, M). No JSON, no explanation, just the letter.
 

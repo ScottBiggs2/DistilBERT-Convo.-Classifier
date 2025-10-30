@@ -44,14 +44,29 @@ def main():
 
     # Create a dictionary for each model's labels, keyed by chat_id
     if isinstance(gemini_data, dict):
-        gemini_labels = {item['chat_id']: item['hard_label'] for item in gemini_data.get('distillation_ready', [])}
+        gemini_labels = {item['chat_id']: item['teacher_prediction'] for item in gemini_data.get('distillation_ready', [])}
     else:
         gemini_labels = {item['chat_id']: item['intent'] for item in gemini_data}
 
-    gpt4o_labels = {item['chat_id']: item['hard_label'] for item in gpt4o_data.get('distillation_ready', [])}
+    gpt4o_labels = {item['chat_id']: item['teacher_prediction'] for item in gpt4o_data.get('distillation_ready', [])}
     gpt4o_soft_labels = {item['chat_id']: item['soft_labels'] for item in gpt4o_data.get('distillation_ready', [])}
     gpt4o_text = {item['chat_id']: item['text'] for item in gpt4o_data.get('distillation_ready', [])}
-    class_order = gpt4o_data.get('metadata', {}).get('class_order', [])
+    class_order = [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M"
+      ]
+    #gpt4o_data.get('metadata', {}).get('class_order', [])
 
     # Debugging logs
     logger.info(f"Found {len(gemini_labels)} labels in {gemini_labels_path}")
