@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-DistilBERT Knowledge Distillation Training Script
+DistilBERT Knowledge Distillation Training Script - Extended to 1024 Tokens
 
 Features:
+- Extended position embeddings to support 1024 tokens
 - Combined hard label (CE) + soft label (KL divergence) losses
 - Custom confusion-pair weighting (harsh NSFW/SFW penalties)
 - Transformers-based training with easy ONNX export
@@ -15,6 +16,7 @@ import logging
 import os
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
@@ -51,9 +53,7 @@ class DistillationConfig:
     
     # Model configuration
     model_name: str = "distilbert/distilbert-base-multilingual-cased"
-    #"google-bert/bert-base-multilingual-cased" ~ 70% (needs more data and/or longer training)
-    # # "distilbert-base-uncased" ~ 85%
-    max_length: int = 1024
+    max_length: int = 1024  # Extended from 512
     num_labels: int = 13
     
     # Training configuration
@@ -64,18 +64,79 @@ class DistillationConfig:
     weight_decay: float = 1e-3
     
     # Distillation configuration
-    temperature: float = 4.0          # Temperature for soft targets
-    alpha: float = 0.7               # Weight for soft loss (1-alpha for hard loss)
+    temperature: float = 4.0
+    alpha: float = 0.7
     
     # Loss weighting configuration
-    banned_unbanned_penalty: float = 5.0  # Heavy penalty for banned/unbanned content confusion
-    within_category_penalty: float = 1.0  # Normal penalty within SFW or NSFW
+    banned_unbanned_penalty: float = 5.0
+    within_category_penalty: float = 1.0
     
     # Evaluation configuration
     eval_steps: int = 500
     save_steps: int = 500
     logging_steps: int = 500
     early_stopping_patience: int = 3
+
+
+def extend_position_embeddings(model, new_max_length=1024):
+    """
+    Extend DistilBERT's position embeddings from 512 to new_max_length
+    
+    Strategy: Linear interpolation of existing embeddings to create smooth transitions
+    This allows the model to handle longer sequences while preserving learned patterns.
+    
+    Args:
+        model: DistilBertForSequenceClassification model
+        new_max_length: Target maximum sequence length (default 1024)
+    
+    Returns:
+        model: Modified model with extended position embeddings
+    """
+    old_embeddings = model.distilbert.embeddings.position_embeddings
+    old_max_length = old_embeddings.weight.size(0)  # Should be 512
+    embedding_dim = old_embeddings.weight.size(1)    # Should be 768
+    
+    if new_max_length <= old_max_length:
+        logger.warning(f"new_max_length {new_max_length} <= existing {old_max_length}, no extension needed")
+        return model
+    
+    logger.info(f"🔧 Extending position embeddings from {old_max_length} to {new_max_length}...")
+    
+    # Create new position embeddings
+    new_embeddings = nn.Embedding(new_max_length, embedding_dim)
+    
+    # Copy old embeddings (positions 0-511)
+    new_embeddings.weight.data[:old_max_length] = old_embeddings.weight.data
+    
+    # Extend positions 512-1023 using linear interpolation
+    # This creates a smooth continuation of the learned position patterns
+    # Strategy: Interpolate by cycling through the original embeddings
+    for i in range(old_max_length, new_max_length):
+        # Map new position to old position space using modulo
+        # This effectively "wraps around" the learned patterns
+        source_idx = (i - old_max_length) % old_max_length
+        
+        # Use interpolation for smoother transition
+        # Blend between current and next position
+        next_idx = (source_idx + 1) % old_max_length
+        blend_factor = ((i - old_max_length) % old_max_length) / old_max_length
+        
+        new_embeddings.weight.data[i] = (
+            (1 - blend_factor) * old_embeddings.weight.data[source_idx] + 
+            blend_factor * old_embeddings.weight.data[next_idx]
+        )
+    
+    # Replace the position embeddings in the model
+    model.distilbert.embeddings.position_embeddings = new_embeddings
+    model.config.max_position_embeddings = new_max_length
+    
+    logger.info(f"✅ Position embeddings extended successfully to {new_max_length}")
+    logger.info(f"📊 Embedding shape: [{new_max_length}, {embedding_dim}]")
+    logger.info(f"⚠️  Note: Extended positions (512-{new_max_length-1}) are initialized via interpolation")
+    logger.info(f"💡 Consider additional training to optimize these new position embeddings")
+    
+    return model
+
 
 class DistillationDataCollator:
     """Custom data collator for knowledge distillation that handles both hard and soft labels"""
@@ -84,10 +145,6 @@ class DistillationDataCollator:
         self.tokenizer = tokenizer
     
     def __call__(self, features):
-        # Debug: Check what keys are actually present
-        if len(features) > 0:
-            print(f"DEBUG: Available keys in first feature: {features[0].keys()}")
-        
         # Safely extract tensors, handling both dict and object-like features
         try:
             batch = {
@@ -109,15 +166,16 @@ class DistillationDataCollator:
                 ])
             }
         except (KeyError, AttributeError) as e:
-            print(f"ERROR in data collator: {e}")
-            print(f"Feature type: {type(features[0])}")
+            logger.error(f"ERROR in data collator: {e}")
+            logger.error(f"Feature type: {type(features[0])}")
             if isinstance(features[0], dict):
-                print(f"Feature keys: {features[0].keys()}")
+                logger.error(f"Feature keys: {features[0].keys()}")
             else:
-                print(f"Feature attributes: {dir(features[0])}")
+                logger.error(f"Feature attributes: {dir(features[0])}")
             raise
         
         return batch
+
 
 class ConversationDataset(Dataset):
     """Dataset for conversation classification with knowledge distillation"""
@@ -132,6 +190,7 @@ class ConversationDataset(Dataset):
         
         logger.info(f"📊 Dataset created with {len(data)} samples")
         logger.info(f"🏷️  Class order: {class_order}")
+        logger.info(f"📏 Max sequence length: {max_length} tokens")
     
     def __len__(self):
         return len(self.data)
@@ -151,16 +210,16 @@ class ConversationDataset(Dataset):
         # Hard label (ground truth)
         hard_label = self.class_to_idx.get(item['hard_label'], 0)
         
-        # Soft labels (teacher predictions) - ensure it's a proper tensor
+        # Soft labels (teacher predictions)
         soft_labels = torch.tensor(item['soft_labels'], dtype=torch.float32)
         
-        # IMPORTANT: Return as plain dict with tensors, not nested
         return {
-            'input_ids': encoding['input_ids'].squeeze(0),  # Remove batch dim
-            'attention_mask': encoding['attention_mask'].squeeze(0),  # Remove batch dim
+            'input_ids': encoding['input_ids'].squeeze(0),
+            'attention_mask': encoding['attention_mask'].squeeze(0),
             'labels': torch.tensor(hard_label, dtype=torch.long),
             'soft_labels': soft_labels,
         }
+
 
 class WeightedDistillationLoss:
     """Custom loss combining hard labels, soft labels, and confusion penalties"""
@@ -185,13 +244,11 @@ class WeightedDistillationLoss:
         
         for i, true_class in enumerate(self.class_order):
             for j, pred_class in enumerate(self.class_order):
-                if i == j:  # Correct prediction
+                if i == j:
                     penalty_matrix[i, j] = 0.0
                 elif self._is_cross_category_error(true_class, pred_class):
-                    # Heavy penalty for NSFW/SFW confusion
                     penalty_matrix[i, j] = self.config.banned_unbanned_penalty
                 else:
-                    # Normal penalty for within-category confusion
                     penalty_matrix[i, j] = self.config.within_category_penalty
         
         logger.info("🎯 Penalty Matrix Preview:")
@@ -211,23 +268,16 @@ class WeightedDistillationLoss:
                     soft_labels: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, float]]:
         """Compute combined distillation loss with confusion penalties"""
         
-        batch_size = student_logits.size(0)
         device = student_logits.device
-        
-        # Move penalty matrix to correct device
         penalty_matrix = self.penalty_matrix.to(device)
         
-        # 1. Hard label loss (Cross Entropy) with confusion penalties
+        # 1. Hard label loss with confusion penalties
         hard_loss = F.cross_entropy(student_logits, hard_labels, reduction='none')
-        
-        # Apply confusion penalties based on predicted class
         student_probs = F.softmax(student_logits, dim=-1)
         predicted_classes = torch.argmax(student_probs, dim=-1)
         
-        # Get penalties for each sample
         confusion_penalties = penalty_matrix[hard_labels, predicted_classes]
-        weighted_hard_loss = hard_loss * confusion_penalties
-        weighted_hard_loss = weighted_hard_loss.mean()
+        weighted_hard_loss = (hard_loss * confusion_penalties).mean()
         
         # 2. Soft label loss (KL Divergence)
         student_log_probs = F.log_softmax(student_logits / self.config.temperature, dim=-1)
@@ -252,8 +302,9 @@ class WeightedDistillationLoss:
             'avg_confusion_penalty': confusion_penalties.mean().item()
         }
 
+
 class DistillationTrainer(Trainer):
-    """Custom trainer for knowledge distillation - Fixed for modern transformers"""
+    """Custom trainer for knowledge distillation"""
     
     def __init__(self, loss_fn: WeightedDistillationLoss, **kwargs):
         super().__init__(**kwargs)
@@ -261,12 +312,7 @@ class DistillationTrainer(Trainer):
         self.loss_history = []
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        """
-        Compute distillation loss - Updated signature for modern transformers
-        
-        The num_items_in_batch parameter was added in newer versions of transformers
-        to handle gradient accumulation correctly.
-        """
+        """Compute distillation loss"""
         
         # Forward pass
         outputs = model(
@@ -277,7 +323,7 @@ class DistillationTrainer(Trainer):
         # Compute distillation loss
         loss, loss_dict = self.loss_fn.compute_loss(
             outputs.logits,
-            inputs['labels'],  # Changed from hard_labels to labels
+            inputs['labels'],
             inputs['soft_labels']
         )
         
@@ -286,8 +332,9 @@ class DistillationTrainer(Trainer):
         
         return (loss, outputs) if return_outputs else loss
 
+
 class DistilBERTDistillation:
-    """Main class for DistilBERT knowledge distillation training"""
+    """Main class for DistilBERT knowledge distillation training with 1024 token support"""
     
     def __init__(self, config: DistillationConfig):
         self.config = config
@@ -302,6 +349,11 @@ class DistilBERTDistillation:
             output_attentions=False,
             output_hidden_states=False
         )
+        
+        # 🔥 EXTEND POSITION EMBEDDINGS TO SUPPORT 1024 TOKENS
+        if config.max_length > 512:
+            logger.info(f"🚀 Extending model to support {config.max_length} tokens...")
+            self.model = extend_position_embeddings(self.model, config.max_length)
         
         logger.info(f"✅ DistilBERT model loaded: {config.model_name}")
         logger.info(f"📊 Number of parameters: {sum(p.numel() for p in self.model.parameters()):,}")
@@ -327,7 +379,6 @@ class DistilBERTDistillation:
         if not class_order:
             raise ValueError("`class_order` not found in the first sample of the data.")
 
-        # Assuming agreement rate is not essential for training, but we can check for it
         agreement_rate = distillation_samples[0].get('agreement', 'unknown')
 
         logger.info(f"📊 Loaded {len(distillation_samples)} distillation samples")
@@ -345,7 +396,7 @@ class DistilBERTDistillation:
         np.random.seed(42)
         indices = np.random.permutation(len(samples))
         
-        # Calculate split sizes (train: 70%, val: 15%, test: 15%)
+        # Calculate split sizes
         train_size = int(len(samples) * train_split)
         val_size = int(len(samples) * val_split)
         
@@ -357,7 +408,7 @@ class DistilBERTDistillation:
         val_samples = [samples[i] for i in val_indices]
         test_samples = [samples[i] for i in test_indices]
         
-        # Save splits to disk for evaluation script
+        # Save splits to disk
         if save_splits:
             splits_dir = "data/splits"
             os.makedirs(splits_dir, exist_ok=True)
@@ -402,10 +453,7 @@ class DistilBERTDistillation:
         # Create loss function
         loss_fn = WeightedDistillationLoss(self.config, train_dataset.class_order)
         
-        # DON'T create a custom data collator - we'll handle batching manually
-        # The issue is that Trainer strips out non-standard keys
-        
-        # Training arguments - REMOVE data_collator parameter
+        # Training arguments
         training_args = TrainingArguments(
             output_dir=output_dir,
             num_train_epochs=self.config.num_epochs,
@@ -423,13 +471,13 @@ class DistilBERTDistillation:
             metric_for_best_model="eval_loss",
             greater_is_better=False,
             save_total_limit=3,
-            report_to="wandb",  # Report to wandb
+            report_to="wandb",
             dataloader_num_workers=0,
             logging_dir=os.path.join(output_dir, "logs"),
-            remove_unused_columns=False,  # THIS IS THE KEY FIX!
+            remove_unused_columns=False,  # Critical for custom fields
         )
         
-        # Now use your custom collator
+        # Data collator
         data_collator = DistillationDataCollator(self.tokenizer)
         
         # Create trainer
@@ -439,12 +487,11 @@ class DistilBERTDistillation:
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
-            data_collator=data_collator,  # Now this will work
+            data_collator=data_collator,
             callbacks=[EarlyStoppingCallback(early_stopping_patience=self.config.early_stopping_patience)]
         )
         
-
-        # Right before trainer.train() in the train() method, add:
+        # Test dataset sample
         logger.info("🔍 Testing dataset sample...")
         sample = train_dataset[0]
         logger.info(f"Sample keys: {sample.keys()}")
@@ -494,7 +541,7 @@ class DistilBERTDistillation:
         # Get predictions
         predictions = trainer.predict(dataset)
         y_pred = np.argmax(predictions.predictions, axis=1)
-        y_true = [sample['labels'].item() for sample in dataset]  # Changed from hard_labels to labels
+        y_true = [sample['labels'].item() for sample in dataset]
         
         # Classification report
         class_names = class_order
@@ -512,7 +559,7 @@ class DistilBERTDistillation:
         plt.figure(figsize=(12, 10))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                    xticklabels=class_names, yticklabels=class_names)
-        plt.title(f'DistilBERT Knowledge Distillation - {prefix.title()} Confusion Matrix\n' 
+        plt.title(f'DistilBERT Knowledge Distillation - {prefix.title()} Confusion Matrix\n'
                  f'Accuracy: {report["accuracy"]:.3f}')
         plt.xlabel('Predicted')
         plt.ylabel('Actual')
@@ -520,16 +567,16 @@ class DistilBERTDistillation:
         confusion_path = os.path.join(output_dir, f'{prefix}_confusion_matrix.png')
         plt.savefig(confusion_path, dpi=300, bbox_inches='tight')
         logger.info(f"💾 {prefix.title()} confusion matrix saved to {confusion_path}")
-        plt.close()  # Close to prevent display during training
+        plt.close()
         
         # Calculate business-critical metrics
-        banned_classes = {'X', 'Y', 'Z'}
-        ok_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
+        banned_classes = {'D', 'J', 'M'}
+        ok_classes = {'A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'K', 'L'}
         
-        # Cross-category errors (most expensive)
+        # Cross-category errors
         cross_category_errors = 0
-        nsfw_recall_errors = 0  # NSFW labeled as SFW (high risk)
-        nsfw_precision_errors = 0  # SFW labeled as NSFW (revenue loss)
+        nsfw_recall_errors = 0
+        nsfw_precision_errors = 0
         total_predictions = len(y_true)
         
         for true_idx, pred_idx in zip(y_true, y_pred):
@@ -587,6 +634,11 @@ class DistilBERTDistillation:
             model = DistilBertForSequenceClassification.from_pretrained(model_dir)
             tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
             
+            # IMPORTANT: Re-extend position embeddings for ONNX export
+            if self.config.max_length > 512:
+                logger.info(f"🔧 Re-extending position embeddings for ONNX export...")
+                model = extend_position_embeddings(model, self.config.max_length)
+            
             # Create a dummy input for tracing
             dummy_text = "This is a sample text for ONNX export."
             dummy_input = tokenizer(
@@ -629,24 +681,34 @@ class DistilBERTDistillation:
             
         except Exception as e:
             logger.error(f"❌ Failed to export to ONNX: {e}")
-            # Log error to wandb if initialized
             if wandb.run:
                 wandb.log({"onnx_export_error": str(e)})
+
+
+def safe_log_artifact(path, name, artifact_type):
+    """Log artifact only if file exists"""
+    if os.path.exists(path):
+        wandb.log_artifact(path, name=name, type=artifact_type)
+        logger.info(f"✅ Logged artifact: {name}")
+    else:
+        logger.warning(f"⚠️  Artifact not found, skipping: {path}")
+
 
 async def main():
     """Main training function with immediate post-training evaluation"""
     
     # Configuration
     DATA_PATH = os.getenv("DISTILLATION_DATA_PATH", "data/agreed_distillation_data.json")
-    OUTPUT_DIR = os.getenv("MODEL_OUTPUT_DIR", "models/distilbert_distilled")
+    OUTPUT_DIR = os.getenv("MODEL_OUTPUT_DIR", "models/distilbert_distilled_1024")
     
     # Initialize wandb
     wandb.init(
         project="distilbert-conversation-classifier-1024-tokens",
-        name=f"distilbert-distilled-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        name=f"distilbert-1024-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         config={
             "data_path": DATA_PATH,
             "output_dir": OUTPUT_DIR,
+            "max_length": 1024,
         }
     )
     
@@ -659,10 +721,11 @@ async def main():
         banned_unbanned_penalty=float(os.getenv("NSFW_SFW_PENALTY", "5.0")),
     )
     
-    logger.info("🎓 DistilBERT Knowledge Distillation Training")
+    logger.info("🎓 DistilBERT Knowledge Distillation Training (1024 Tokens)")
     logger.info(f"📊 Temperature: {config.temperature}")
     logger.info(f"⚖️  Alpha (soft/hard loss balance): {config.alpha}")
     logger.info(f"💥 NSFW/SFW penalty: {config.banned_unbanned_penalty}x")
+    logger.info(f"📏 Max sequence length: {config.max_length} tokens")
     logger.info(f"📂 Data: {DATA_PATH}")
     logger.info(f"📁 Output: {OUTPUT_DIR}")
     
@@ -685,15 +748,15 @@ async def main():
     # Immediate post-training evaluation
     logger.info("📊 Running immediate post-training evaluation...")
     
-    # 1. Validation set evaluation (development feedback)
+    # 1. Validation set evaluation
     logger.info("📖 Evaluating on validation set...")
     val_results = distiller.evaluate_model(trainer, val_dataset, class_order, OUTPUT_DIR, prefix="validation")
     
-    # 2. Test set evaluation (final performance)
+    # 2. Test set evaluation
     logger.info("🧪 Evaluating on held-out test set...")
     test_results = distiller.evaluate_model(trainer, test_dataset, class_order, OUTPUT_DIR, prefix="test")
     
-    # 3. Compare validation vs test performance (check for overfitting)
+    # 3. Compare validation vs test performance
     val_accuracy = val_results['classification_report']['accuracy']
     test_accuracy = test_results['classification_report']['accuracy']
     accuracy_drop = val_accuracy - test_accuracy
@@ -730,7 +793,8 @@ async def main():
             'banned_unbanned_penalty': config.banned_unbanned_penalty,
             'num_epochs': config.num_epochs,
             'learning_rate': config.learning_rate,
-            'batch_size': config.batch_size
+            'batch_size': config.batch_size,
+            'max_length': config.max_length,
         },
         'data_splits': {
             'train_samples': len(train_dataset),
@@ -766,22 +830,22 @@ async def main():
     
     logger.info("✅ Training pipeline complete!")
     logger.info(f"📊 Comprehensive summary saved to: {summary_path}")
-    logger.info("🎯 Model ready for production deployment and ONNX export!")
+    logger.info("🎯 Model ready for production deployment!")
     
     # Log artifacts to wandb
     wandb.log({"training_summary": training_summary})
-    wandb.log_artifact(summary_path, name="training_summary", type="results")
-    wandb.log_artifact(os.path.join(OUTPUT_DIR, "validation_confusion_matrix.png"), name="validation_confusion_matrix", type="image")
-    wandb.log_artifact(os.path.join(OUTPUT_DIR, "test_confusion_matrix.png"), name="test_confusion_matrix", type="image")
-    wandb.log_artifact(os.path.join(OUTPUT_DIR, "validation_results.json"), name="validation_results", type="results")
-    wandb.log_artifact(os.path.join(OUTPUT_DIR, "test_results.json"), name="test_results", type="results")
-    wandb.log_artifact(os.path.join(OUTPUT_DIR, "onnx_config.json"), name="onnx_config", type="config")
+    safe_log_artifact(summary_path, "training_summary", "results")
+    safe_log_artifact(os.path.join(OUTPUT_DIR, "validation_confusion_matrix.png"), "validation_confusion_matrix", "image")
+    safe_log_artifact(os.path.join(OUTPUT_DIR, "test_confusion_matrix.png"), "test_confusion_matrix", "image")
+    safe_log_artifact(os.path.join(OUTPUT_DIR, "validation_results.json"), "validation_results", "results")
+    safe_log_artifact(os.path.join(OUTPUT_DIR, "test_results.json"), "test_results", "results")
+    safe_log_artifact(os.path.join(OUTPUT_DIR, "onnx_config.json"), "onnx_config", "config")
     
     # Log model artifact
     model_artifact = wandb.Artifact(
-        "distilbert-distilled-model", 
+        "distilbert-distilled-model-1024", 
         type="model",
-        description="Distilled DistilBERT model for conversation classification"
+        description="Distilled DistilBERT model (1024 tokens) for conversation classification"
     )
     model_artifact.add_dir(OUTPUT_DIR)
     wandb.log_artifact(model_artifact)
@@ -789,6 +853,7 @@ async def main():
     wandb.finish()
     
     return training_summary
+
 
 if __name__ == "__main__":
     try:
