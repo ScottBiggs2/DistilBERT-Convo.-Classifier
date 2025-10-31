@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DistilBERT Knowledge Distillation Training Script - Extended to 1024 Tokens
+BERT Knowledge Distillation Training Script - Extended to 1024 Tokens
 
 Features:
 - Extended position embeddings to support 1024 tokens
@@ -29,8 +29,8 @@ warnings.filterwarnings('ignore')
 import wandb
 
 from transformers import (
-    DistilBertTokenizer, 
-    DistilBertForSequenceClassification,
+    BertTokenizer,
+    BertForSequenceClassification,
     TrainingArguments,
     Trainer,
     EarlyStoppingCallback,
@@ -52,7 +52,7 @@ class DistillationConfig:
     """Configuration for knowledge distillation training"""
     
     # Model configuration
-    model_name: str =  "distilbert/distilbert-base-uncased" #distilbert/distilbert-base-multilingual-cased"
+    model_name: str = "google-bert/bert-base-multilingual-cased"
     max_length: int = 1024  # Extended from 512
     num_labels: int = 13
     
@@ -80,19 +80,22 @@ class DistillationConfig:
 
 def extend_position_embeddings(model, new_max_length=1024):
     """
-    Extend DistilBERT's position embeddings from 512 to new_max_length
+    Extend BERT's position embeddings from 512 to new_max_length
     
     Strategy: Linear interpolation of existing embeddings to create smooth transitions
     This allows the model to handle longer sequences while preserving learned patterns.
     
+    Note: BERT and DistilBERT have the same embedding architecture, so this function
+    works identically for both models.
+    
     Args:
-        model: DistilBertForSequenceClassification model
+        model: BertForSequenceClassification model
         new_max_length: Target maximum sequence length (default 1024)
     
     Returns:
         model: Modified model with extended position embeddings
     """
-    old_embeddings = model.distilbert.embeddings.position_embeddings
+    old_embeddings = model.bert.embeddings.position_embeddings
     old_max_length = old_embeddings.weight.size(0)  # Should be 512
     embedding_dim = old_embeddings.weight.size(1)    # Should be 768
     
@@ -124,26 +127,26 @@ def extend_position_embeddings(model, new_max_length=1024):
     
     # CRITICAL FIXES:
     # 1. Replace the embedding layer itself
-    model.distilbert.embeddings.position_embeddings = new_embeddings
+    model.bert.embeddings.position_embeddings = new_embeddings
     
     # 2. Update the config (this is what the model checks during forward pass)
     model.config.max_position_embeddings = new_max_length
     
     # 3. **THE KEY FIX**: Update the position_ids buffer
-    # DistilBERT creates a cached position_ids buffer at initialization:
+    # BERT creates a cached position_ids buffer at initialization:
     # self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
     # This buffer is what's causing the 512 limit! We need to recreate it.
-    if hasattr(model.distilbert.embeddings, 'position_ids'):
-        logger.info(f"🔧 Updating position_ids buffer from {model.distilbert.embeddings.position_ids.shape} to [1, {new_max_length}]")
+    if hasattr(model.bert.embeddings, 'position_ids'):
+        logger.info(f"🔧 Updating position_ids buffer from {model.bert.embeddings.position_ids.shape} to [1, {new_max_length}]")
         # Delete the old buffer
-        delattr(model.distilbert.embeddings, 'position_ids')
+        delattr(model.bert.embeddings, 'position_ids')
         # Register a new buffer with the correct size
-        model.distilbert.embeddings.register_buffer(
+        model.bert.embeddings.register_buffer(
             "position_ids", 
             torch.arange(new_max_length).expand((1, -1)),
             persistent=False
         )
-        logger.info(f"✅ position_ids buffer updated to shape: {model.distilbert.embeddings.position_ids.shape}")
+        logger.info(f"✅ position_ids buffer updated to shape: {model.bert.embeddings.position_ids.shape}")
     
     logger.info(f"✅ Position embeddings extended successfully to {new_max_length}")
     logger.info(f"📊 New embedding shape: {new_embeddings.weight.shape}")
@@ -195,7 +198,7 @@ class DistillationDataCollator:
 class ConversationDataset(Dataset):
     """Dataset for conversation classification with knowledge distillation"""
     
-    def __init__(self, data: List[Dict], tokenizer: DistilBertTokenizer, 
+    def __init__(self, data: List[Dict], tokenizer: BertTokenizer, 
                  max_length: int, class_order: List[str]):
         self.data = data
         self.tokenizer = tokenizer
@@ -348,8 +351,8 @@ class DistillationTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
-class DistilBERTDistillation:
-    """Main class for DistilBERT knowledge distillation training with 1024 token support"""
+class BERTDistillation:
+    """Main class for BERT knowledge distillation training with 1024 token support"""
     
     def __init__(self, config: DistillationConfig):
         self.config = config
@@ -357,13 +360,13 @@ class DistilBERTDistillation:
         logger.info(f"🖥️  Using device: {self.device}")
         
         # Initialize tokenizer and model
-        self.tokenizer = DistilBertTokenizer.from_pretrained(config.model_name)
+        self.tokenizer = BertTokenizer.from_pretrained(config.model_name)
         
         # Load model with updated config for max_position_embeddings
         if config.max_length > 512:
             logger.info(f"🔧 Loading model with position embedding extension preparation...")
             # First load the model normally
-            self.model = DistilBertForSequenceClassification.from_pretrained(
+            self.model = BertForSequenceClassification.from_pretrained(
                 config.model_name,
                 num_labels=config.num_labels,
                 output_attentions=False,
@@ -373,14 +376,14 @@ class DistilBERTDistillation:
             # Then extend position embeddings
             self.model = extend_position_embeddings(self.model, config.max_length)
         else:
-            self.model = DistilBertForSequenceClassification.from_pretrained(
+            self.model = BertForSequenceClassification.from_pretrained(
                 config.model_name,
                 num_labels=config.num_labels,
                 output_attentions=False,
                 output_hidden_states=False
             )
         
-        logger.info(f"✅ DistilBERT model loaded: {config.model_name}")
+        logger.info(f"✅ BERT model loaded: {config.model_name}")
         logger.info(f"📊 Number of parameters: {sum(p.numel() for p in self.model.parameters()):,}")
         logger.info(f"📏 Max position embeddings: {self.model.config.max_position_embeddings}")
     
@@ -468,7 +471,7 @@ class DistilBERTDistillation:
         return train_dataset, val_dataset, test_dataset
     
     def train(self, train_dataset: ConversationDataset, val_dataset: ConversationDataset,
-            output_dir: str = "models/distilbert_distilled"):
+            output_dir: str = "models/bert_distilled"):
         """Train the model with knowledge distillation"""
         
         logger.info("🚀 Starting knowledge distillation training...")
@@ -527,8 +530,8 @@ class DistilBERTDistillation:
         logger.info(f"Sample types: {[(k, type(v), v.shape if hasattr(v, 'shape') else 'no shape') for k, v in sample.items()]}")
         
         # Verify position embeddings are correct size before training
-        actual_pos_emb_size = trainer.model.distilbert.embeddings.position_embeddings.num_embeddings
-        actual_pos_emb_weight_shape = trainer.model.distilbert.embeddings.position_embeddings.weight.shape
+        actual_pos_emb_size = trainer.model.bert.embeddings.position_embeddings.num_embeddings
+        actual_pos_emb_weight_shape = trainer.model.bert.embeddings.position_embeddings.weight.shape
         logger.info(f"🔍 Verifying position embeddings before training:")
         logger.info(f"   - num_embeddings: {actual_pos_emb_size}")
         logger.info(f"   - weight shape: {actual_pos_emb_weight_shape}")
@@ -601,7 +604,7 @@ class DistilBERTDistillation:
         plt.figure(figsize=(12, 10))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                    xticklabels=class_names, yticklabels=class_names)
-        plt.title(f'DistilBERT Knowledge Distillation - {prefix.title()} Confusion Matrix\n'
+        plt.title(f'BERT Knowledge Distillation - {prefix.title()} Confusion Matrix\n'
                  f'Accuracy: {report["accuracy"]:.3f}')
         plt.xlabel('Predicted')
         plt.ylabel('Actual')
@@ -673,8 +676,8 @@ class DistilBERTDistillation:
         
         try:
             # Load the trained model and tokenizer
-            model = DistilBertForSequenceClassification.from_pretrained(model_dir)
-            tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
+            model = BertForSequenceClassification.from_pretrained(model_dir)
+            tokenizer = BertTokenizer.from_pretrained(model_dir)
             
             # IMPORTANT: Re-extend position embeddings for ONNX export
             if self.config.max_length > 512:
@@ -741,12 +744,12 @@ async def main():
     
     # Configuration
     DATA_PATH = os.getenv("DISTILLATION_DATA_PATH", "data/agreed_distillation_data.json")
-    OUTPUT_DIR = os.getenv("MODEL_OUTPUT_DIR", "models/distilbert_distilled_1024")
+    OUTPUT_DIR = os.getenv("MODEL_OUTPUT_DIR", "models/bert_distilled_1024")
     
     # Initialize wandb
     wandb.init(
-        project="distilbert-conversation-classifier-1024-tokens",
-        name=f"distilbert-1024-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        project="bert-conversation-classifier-1024-tokens",
+        name=f"bert-1024-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         config={
             "data_path": DATA_PATH,
             "output_dir": OUTPUT_DIR,
@@ -755,15 +758,15 @@ async def main():
     )
     
     config = DistillationConfig(
-        batch_size=int(os.getenv("BATCH_SIZE", "8")),
+        batch_size=int(os.getenv("BATCH_SIZE", "16")),
         learning_rate=float(os.getenv("LEARNING_RATE", "2e-5")),
-        num_epochs=10, #int(os.getenv("NUM_EPOCHS", "10")),
+        num_epochs=15,
         temperature=float(os.getenv("TEMPERATURE", "4.0")),
         alpha=float(os.getenv("ALPHA", "0.7")),
         banned_unbanned_penalty=float(os.getenv("NSFW_SFW_PENALTY", "5.0")),
     )
     
-    logger.info("🎓 DistilBERT Knowledge Distillation Training (1024 Tokens)")
+    logger.info("🎓 BERT Knowledge Distillation Training (1024 Tokens)")
     logger.info(f"📊 Temperature: {config.temperature}")
     logger.info(f"⚖️  Alpha (soft/hard loss balance): {config.alpha}")
     logger.info(f"💥 NSFW/SFW penalty: {config.banned_unbanned_penalty}x")
@@ -775,7 +778,7 @@ async def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     # Initialize distillation trainer
-    distiller = DistilBERTDistillation(config)
+    distiller = BERTDistillation(config)
     
     # Load data
     samples, class_order = distiller.load_distillation_data(DATA_PATH)
@@ -885,9 +888,9 @@ async def main():
     
     # Log model artifact
     model_artifact = wandb.Artifact(
-        "distilbert-distilled-model-1024", 
+        "bert-distilled-model-1024", 
         type="model",
-        description="Distilled DistilBERT model (1024 tokens) for conversation classification"
+        description="Distilled BERT model (1024 tokens) for conversation classification"
     )
     model_artifact.add_dir(OUTPUT_DIR)
     wandb.log_artifact(model_artifact)
