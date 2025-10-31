@@ -97,6 +97,7 @@ matplotlib>=3.5.0
 seaborn>=0.11.0
 
 wandb
+onnxscript
 
 # Optional: For advanced optimization
 # intel-extension-for-pytorch  # Uncomment for Intel CPU optimization
