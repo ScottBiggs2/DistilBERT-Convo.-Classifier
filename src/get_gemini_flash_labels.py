@@ -206,11 +206,10 @@ async def gemini_label_one(item, max_retries=MAX_RETRIES):
     # This is important as 'item' will be held in memory
     item_copy = item.copy()
     text = item_copy.get("sequence", "")
-    json_example = '{"intent": "<single_letter>"}'
-    prompt_content = LABEL_PROMPT.format(
+    prompt_content = JSON_LABEL_PROMPT.format(
         intent_categories_list=INTENT_CATEGORIES_LIST,
         examples_list=EXAMPLES_LIST,
-        json_example=json_example,
+        json_example=JSON_EXAMPLE,
         conversation_text=text
     )
     

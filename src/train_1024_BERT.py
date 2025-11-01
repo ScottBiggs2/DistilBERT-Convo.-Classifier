@@ -148,6 +148,21 @@ def extend_position_embeddings(model, new_max_length=1024):
         )
         logger.info(f"✅ position_ids buffer updated to shape: {model.bert.embeddings.position_ids.shape}")
     
+    # 4. **BERT-SPECIFIC FIX**: Update the token_type_ids buffer
+    # BERT also has a token_type_ids buffer for segment embeddings that needs extension
+    # self.register_buffer("token_type_ids", torch.zeros(position_ids.size(), dtype=torch.long), persistent=False)
+    if hasattr(model.bert.embeddings, 'token_type_ids'):
+        logger.info(f"🔧 Updating token_type_ids buffer from {model.bert.embeddings.token_type_ids.shape} to [1, {new_max_length}]")
+        # Delete the old buffer
+        delattr(model.bert.embeddings, 'token_type_ids')
+        # Register a new buffer with the correct size (all zeros for default segment)
+        model.bert.embeddings.register_buffer(
+            "token_type_ids",
+            torch.zeros((1, new_max_length), dtype=torch.long),
+            persistent=False
+        )
+        logger.info(f"✅ token_type_ids buffer updated to shape: {model.bert.embeddings.token_type_ids.shape}")
+    
     logger.info(f"✅ Position embeddings extended successfully to {new_max_length}")
     logger.info(f"📊 New embedding shape: {new_embeddings.weight.shape}")
     logger.info(f"🔍 Model config max_position_embeddings: {model.config.max_position_embeddings}")

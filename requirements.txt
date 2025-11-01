@@ -99,6 +99,8 @@ seaborn>=0.11.0
 wandb
 onnxscript
 google-genai
+ijson 
+tabulate 
 
 # Optional: For advanced optimization
 # intel-extension-for-pytorch  # Uncomment for Intel CPU optimization

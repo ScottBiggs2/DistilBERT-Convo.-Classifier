@@ -335,3 +335,142 @@ weighted avg       0.82      0.81      0.81      1346
 2025-10-29 23:48:39,616 - INFO - 🚀 Exporting model to ONNX format...
 
 
+# DistilBERT 1024 Tokens (simpler message parsing, uncased base): 
+
+📋 VALIDATION CLASSIFICATION REPORT
+2025-10-30 23:58:42,609 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.87      0.87      0.87       410
+           B       0.82      0.94      0.87       165
+           C       0.76      0.56      0.65       126
+           D       0.92      0.94      0.93       285
+           E       0.65      0.75      0.70       149
+           F       0.85      0.90      0.87        58
+           G       0.93      0.75      0.83        36
+           H       0.67      0.30      0.41        20
+           I       0.87      0.83      0.85        64
+           J       0.80      0.77      0.78       104
+           K       0.78      0.67      0.72        27
+           L       0.21      0.25      0.23        20
+           M       0.69      0.65      0.67        17
+
+    accuracy                           0.82      1481
+   macro avg       0.76      0.71      0.72      1481
+weighted avg       0.82      0.82      0.82      1481
+
+2025-10-30 23:58:43,661 - INFO - 💾 Validation confusion matrix saved to models/distilbert_distilled_1024/validation_confusion_matrix.png
+2025-10-30 23:58:43,662 - INFO - 
+🚨 VALIDATION BUSINESS IMPACT ANALYSIS:
+2025-10-30 23:58:43,662 - INFO -    Total predictions: 1481
+2025-10-30 23:58:43,662 - INFO -    Cross-category errors (NSFW/SFW): 63
+2025-10-30 23:58:43,663 - INFO -    Cross-category error rate: 4.25%
+2025-10-30 23:58:43,663 - INFO -    NSFW recall errors (missed NSFW): 30
+2025-10-30 23:58:43,663 - INFO -    NSFW precision errors (false NSFW): 33
+2025-10-30 23:58:43,663 - INFO -    Overall accuracy: 82.11%
+2025-10-30 23:58:43,664 - INFO - 💾 Validation results saved to models/distilbert_distilled_1024/validation_results.json
+
+
+TEST CLASSIFICATION REPORT
+2025-10-30 23:59:24,439 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.88      0.85      0.87       431
+           B       0.73      0.90      0.81       172
+           C       0.62      0.50      0.55       121
+           D       0.93      0.92      0.92       294
+           E       0.63      0.78      0.70       128
+           F       0.79      0.80      0.80        46
+           G       0.81      0.74      0.78        35
+           H       0.87      0.54      0.67        24
+           I       0.97      0.95      0.96        62
+           J       0.88      0.79      0.83        94
+           K       0.97      0.73      0.83        44
+           L       0.42      0.53      0.47        19
+           M       0.54      0.54      0.54        13
+
+    accuracy                           0.82      1483
+   macro avg       0.77      0.74      0.75      1483
+weighted avg       0.82      0.82      0.82      1483
+
+2025-10-30 23:59:25,457 - INFO - 💾 Test confusion matrix saved to models/distilbert_distilled_1024/test_confusion_matrix.png
+2025-10-30 23:59:25,457 - INFO - 
+🚨 TEST BUSINESS IMPACT ANALYSIS:
+2025-10-30 23:59:25,458 - INFO -    Total predictions: 1483
+2025-10-30 23:59:25,458 - INFO -    Cross-category errors (NSFW/SFW): 66
+2025-10-30 23:59:25,459 - INFO -    Cross-category error rate: 4.45%
+2025-10-30 23:59:25,460 - INFO -    NSFW recall errors (missed NSFW): 40
+2025-10-30 23:59:25,460 - INFO -    NSFW precision errors (false NSFW): 26
+2025-10-30 23:59:25,460 - INFO -    Overall accuracy: 81.66%
+
+# BERT 1024 Tokens (simpler message parsing, uncased base): 
+
+ VALIDATION CLASSIFICATION REPORT
+2025-10-31 04:50:35,977 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.90      0.90      0.90       410
+           B       0.89      0.91      0.90       165
+           C       0.84      0.64      0.73       126
+           D       0.92      0.92      0.92       285
+           E       0.62      0.85      0.72       149
+           F       0.94      0.88      0.91        58
+           G       0.97      0.81      0.88        36
+           H       0.82      0.45      0.58        20
+           I       0.93      0.81      0.87        64
+           J       0.84      0.74      0.79       104
+           K       0.86      0.67      0.75        27
+           L       0.27      0.45      0.34        20
+           M       0.68      0.88      0.77        17
+
+    accuracy                           0.84      1481
+   macro avg       0.81      0.76      0.77      1481
+weighted avg       0.86      0.84      0.85      1481
+
+2025-10-31 04:50:36,998 - INFO - 💾 Validation confusion matrix saved to models/bert_distilled_1024/validation_confusion_matrix.png
+2025-10-31 04:50:36,999 - INFO - 
+🚨 VALIDATION BUSINESS IMPACT ANALYSIS:
+2025-10-31 04:50:36,999 - INFO -    Total predictions: 1481
+2025-10-31 04:50:36,999 - INFO -    Cross-category errors (NSFW/SFW): 62
+2025-10-31 04:50:36,999 - INFO -    Cross-category error rate: 4.19%
+2025-10-31 04:50:37,000 - INFO -    NSFW recall errors (missed NSFW): 35
+2025-10-31 04:50:37,000 - INFO -    NSFW precision errors (false NSFW): 27
+2025-10-31 04:50:37,000 - INFO -    Overall accuracy: 84.40%
+2025-10-31 04:50:37,001 - INFO - 💾 Validation results saved to models/bert_distilled_1024/validation_results.json
+2025-10-31 04:50:37,001 - INFO - 🧪 Evaluating on held-out test set...
+2025-10-31 04:50:37,001 - INFO - 📊 Running comprehensive evaluation on test set...
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████| 93/93 [00:33<00:00,  2.75it/s]
+2025-10-31 04:51:27,188 - INFO - 
+📋 TEST CLASSIFICATION REPORT
+2025-10-31 04:51:27,189 - INFO - ==================================================
+              precision    recall  f1-score   support
+
+           A       0.89      0.91      0.90       431
+           B       0.88      0.87      0.87       172
+           C       0.75      0.68      0.71       121
+           D       0.95      0.93      0.94       294
+           E       0.59      0.81      0.68       128
+           F       0.90      0.83      0.86        46
+           G       0.85      0.63      0.72        35
+           H       0.80      0.67      0.73        24
+           I       0.97      0.92      0.94        62
+           J       0.92      0.82      0.87        94
+           K       0.94      0.73      0.82        44
+           L       0.33      0.47      0.39        19
+           M       0.64      0.54      0.58        13
+
+    accuracy                           0.85      1483
+   macro avg       0.80      0.75      0.77      1483
+weighted avg       0.86      0.85      0.85      1483
+
+2025-10-31 04:51:28,202 - INFO - 💾 Test confusion matrix saved to models/bert_distilled_1024/test_confusion_matrix.png
+2025-10-31 04:51:28,202 - INFO - 
+🚨 TEST BUSINESS IMPACT ANALYSIS:
+2025-10-31 04:51:28,203 - INFO -    Total predictions: 1483
+2025-10-31 04:51:28,203 - INFO -    Cross-category errors (NSFW/SFW): 55
+2025-10-31 04:51:28,203 - INFO -    Cross-category error rate: 3.71%
+2025-10-31 04:51:28,203 - INFO -    NSFW recall errors (missed NSFW): 38
+2025-10-31 04:51:28,203 - INFO -    NSFW precision errors (false NSFW): 17
+2025-10-31 04:51:28,203 - INFO -    Overall accuracy: 84.76%
+2025-10-31 04:51:28,204 - INFO - 💾 Test results saved to models/bert_distilled_1024/test_results.json
+2025-10-31 04:51:28,205 - INFO - 
