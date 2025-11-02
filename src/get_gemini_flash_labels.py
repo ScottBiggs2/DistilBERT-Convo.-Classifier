@@ -168,6 +168,8 @@ M - other_obscene_or_illegal:
 - "Write a detailed story about a violent crime."
 """
 
+JSON_EXAMPLE = '{"intent": "<single_letter>"}'
+
 LABEL_PROMPT = """
 You are an internal tool that classifies a message from a user to an AI chatbot,
 based on the context of the previous messages before it.
@@ -206,7 +208,7 @@ async def gemini_label_one(item, max_retries=MAX_RETRIES):
     # This is important as 'item' will be held in memory
     item_copy = item.copy()
     text = item_copy.get("sequence", "")
-    prompt_content = JSON_LABEL_PROMPT.format(
+    prompt_content = LABEL_PROMPT.format(
         intent_categories_list=INTENT_CATEGORIES_LIST,
         examples_list=EXAMPLES_LIST,
         json_example=JSON_EXAMPLE,
@@ -288,17 +290,17 @@ async def main():
     print(f"📂 Loaded {total_items:,} conversation sequences from {INPUT_FILE}")
     
     # Confirm for large datasets
-    if total_items > 1000:
-        print(f"⚠️  Large dataset detected ({total_items:,} conversations)")
-        print(f"⚠️  All results will be stored in memory before saving.")
-        print(f"⚠️  If the script fails, all progress will be lost.")
-        estimated_time = (total_items / BATCH_SIZE) * 0.5 
-        print(f"⏱️  Estimated processing time: {estimated_time / 60:.1f} minutes (at {BATCH_SIZE} per batch)")
+    # if total_items > 1000:
+    #     print(f"⚠️  Large dataset detected ({total_items:,} conversations)")
+    #     print(f"⚠️  All results will be stored in memory before saving.")
+    #     print(f"⚠️  If the script fails, all progress will be lost.")
+    #     estimated_time = (total_items / BATCH_SIZE) * 0.5 
+    #     print(f"⏱️  Estimated processing time: {estimated_time / 60:.1f} minutes (at {BATCH_SIZE} per batch)")
         
-        response = input("Continue with Gemini labeling? (y/N): ")
-        if response.lower() != 'y':
-            print("❌ Processing cancelled by user")
-            return
+    #     response = input("Continue with Gemini labeling? (y/N): ")
+    #     if response.lower() != 'y':
+    #         print("❌ Processing cancelled by user")
+    #         return
     
     # --- Labeling with Gemini ---
     print(f"\n🧩 Starting Gemini 2.5 Flash labeling (batch size: {BATCH_SIZE})...")

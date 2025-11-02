@@ -116,7 +116,36 @@ If you run them seperately:
 python src/compare_and_filter.py
 ```
 
-# Save as ONNX, in case autosave fails:
+# Export as ONNX, in case autosave fails:
+
+### For 1024 Token Models
+
+**DistilBERT**
 ```bash
-python src/export_to_onnx.py --model-path models/distilbert_intent_classifier --output-path models/onnx_intent_classifier --benchmark --test
+python src/export_to_onnx.py --model-path models/models_1024_base_distilbert --output-path models/models_1024_base_distilbert/onnx --max-length 1024 --test
+```
+
+**BERT**
+```bash
+python src/export_to_onnx.py --model-path models/models_1024_base_bert --output-path models/models_1024_base_bert/onnx --max-length 1024 --test
+```
+
+### For 512 Token Models
+
+**DistilBERT**
+```bash
+python src/export_to_onnx.py --model-path models/distilbert_512_intent_classifier --output-path models/distilbert_512_intent_classifier_onnx --max-length 512 --test
+```
+
+# Evaluation: 
+Supposing you have `records.json` in `data/`, 
+
+First, run (you need to manually change `num_samples` for now): 
+```bash
+python eval/preprocess_data.py
+```
+
+Then, 
+```bash
+python eval/run_evaluation.py 
 ```
