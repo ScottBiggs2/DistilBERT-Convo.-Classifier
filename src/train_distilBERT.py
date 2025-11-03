@@ -65,7 +65,7 @@ class DistillationConfig:
     
     # Distillation configuration
     temperature: float = 4.0          # Temperature for soft targets
-    alpha: float = 0.7               # Weight for soft loss (1-alpha for hard loss)
+    alpha: float = 0.3               # Weight for soft loss (1-alpha for hard loss) - CHANGED FROM 0.7
     
     # Loss weighting configuration
     banned_unbanned_penalty: float = 5.0  # Heavy penalty for banned/unbanned content confusion
@@ -655,7 +655,7 @@ async def main():
         learning_rate=float(os.getenv("LEARNING_RATE", "2e-5")),
         num_epochs=int(os.getenv("NUM_EPOCHS", "5")),
         temperature=float(os.getenv("TEMPERATURE", "4.0")),
-        alpha=float(os.getenv("ALPHA", "0.7")),
+        alpha=float(os.getenv("ALPHA", "0.3")), # CHANGED FROM 0.7
         banned_unbanned_penalty=float(os.getenv("NSFW_SFW_PENALTY", "5.0")),
     )
     
