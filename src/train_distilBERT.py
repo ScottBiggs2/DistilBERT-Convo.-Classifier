@@ -50,7 +50,7 @@ class DistillationConfig:
     """Configuration for knowledge distillation training"""
     
     # Model configuration
-    model_name: str = "distilbert/distilbert-base-multilingual-cased"
+    model_name: str = "distilbert/distilbert-base-uncased"
     #"google-bert/bert-base-multilingual-cased" ~ 70% (needs more data and/or longer training)
     # # "distilbert-base-uncased" ~ 85%
     max_length: int = 512
@@ -149,7 +149,7 @@ class ConversationDataset(Dataset):
         )
         
         # Hard label (ground truth)
-        hard_label = self.class_to_idx.get(item['teacher_prediction'], 0)
+        hard_label = self.class_to_idx.get(item['hard_label'], 0)
         
         # Soft labels (teacher predictions) - ensure it's a proper tensor
         soft_labels = torch.tensor(item['soft_labels'], dtype=torch.float32)
@@ -317,11 +317,13 @@ class DistilBERTDistillation:
         if 'distillation_ready' in data and isinstance(data['distillation_ready'], list):
             distillation_samples = data['distillation_ready']
         else:
-            raise ValueError(f"Expected a JSON file with a 'distillation_ready' key containing a list of samples in {data_path}")
+            # raise ValueError(f"Expected a JSON file with a 'distillation_ready' key containing a list of samples in {data_path}, falling back to use all")
+            distillation_samples = data
 
         if not distillation_samples:
-            raise ValueError(f"No samples found in 'distillation_ready' list in {data_path}")
-
+            # raise ValueError(f"No samples found in 'distillation_ready' list in {data_path}, falling back to use all")
+            distillation_samples = data
+            
         # Extract class_order from the first sample
         class_order = distillation_samples[0].get('class_order')
         if not class_order:
@@ -523,8 +525,8 @@ class DistilBERTDistillation:
         plt.close()  # Close to prevent display during training
         
         # Calculate business-critical metrics
-        banned_classes = {'X', 'Y', 'Z'}
-        ok_classes = {'A', 'B', 'C', 'D', 'E', 'F'}
+        banned_classes = {'D', 'J', 'M'}
+        ok_classes = {'A', 'B', 'C' , 'E', 'F', 'G', 'H', 'I', 'K', 'L'}
         
         # Cross-category errors (most expensive)
         cross_category_errors = 0
