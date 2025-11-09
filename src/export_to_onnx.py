@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export a Transformer model to ONNX using Optimum and quantize it.")
     parser.add_argument("--model-path", type=str, required=True, help="Directory of the fine-tuned model.")
     parser.add_argument("--output-path", type=str, required=True, help="Directory to save the ONNX models.")
-    parser.add_argument("--max-length", type=int, default=1024, help="Max sequence length (informational only).")
+    parser.add_argument("--max-length", type=int, default=512, help="Max sequence length (informational only).")
     
     args = parser.parse_args()
     export_and_quantize_model(args.model_path, args.output_path, args.max_length)
